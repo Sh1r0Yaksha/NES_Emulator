@@ -6,6 +6,11 @@ Besides this, the [nesdev.org](https://www.nesdev.org/) website and [PendleCodeM
 
 This is in no way a working emulator and should not be used to play the games, it is just an attempt to learn how the NES works.
 
+# Important
+
+This is just a hobby project that I do in my free time so it is not complete yet.
+So far only the ADC and SBC instructions for the CPU have been added and implemented.
+
 
 # License (OLC-3)
 Copyright 2018, 2019, 2020, 2021 OneLoneCoder.com

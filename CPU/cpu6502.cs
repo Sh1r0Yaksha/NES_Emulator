@@ -239,7 +239,7 @@ namespace CPU
             // If interrupts are allowed
             if (GetFlag(FLAGS6502.I) == 0)
             {
-                // Push the program counter to the stack. It's 16-bits dont
+                // Push the program counter to the stack. It's 16-bits don't
         		// forget so that takes two pushes
                 
                 Write((ushort)(STKP_Start + STKP), (byte)((PC >> 8) & 0x00FF));
@@ -307,14 +307,14 @@ namespace CPU
                 // Get Starting number of cycles
         		Cycles = Lookup[Opcode].Cycles;
 
-                // Perform fetch of intermmediate data using the
+                // Perform fetch of intermediate data using the
                 // required addressing mode
         		byte additional_cycle1 = Lookup[Opcode].AddressMode();
                 
                 // Perform operation
 		        byte additional_cycle2 = Lookup[Opcode].Operate();
 
-                // The addressmode and opcode may have altered the number
+                // The address mode and opcode may have altered the number
                 // of cycles this instruction requires before its completed
         		Cycles += (byte)(additional_cycle1 & additional_cycle2);
 
@@ -373,7 +373,7 @@ namespace CPU
                 STATUS &= (byte)~f;
         }
 
-        // Helper Fuction to get the complete address from 
+        // Helper function to get the complete address from 
         // the two lo and hi fragments of PC
         private ushort GetAddressFromPC(out bool pageChange, out ushort lo, out ushort hi)
         {
@@ -391,7 +391,7 @@ namespace CPU
             return addr;
         }
 
-        // Assisstive variables to facilitate emulation
+        // Assistive variables to facilitate emulation
         private byte Fetched = 0x00;   // Represents the working input value to the ALU
         private ushort Temp = 0x0000; // A convenience variable used everywhere
         private ushort AddrAbs = 0x0000; // All used memory addresses end up in here
@@ -549,7 +549,7 @@ namespace CPU
         // instruction is unusual in that it has a bug in the hardware! To emulate its
         // function accurately, we also need to emulate this bug. If the low byte of the
         // supplied address is 0xFF, then to read the high byte of the actual address
-        // we need to cross a page boundary. This doesnt actually work on the chip as 
+        // we need to cross a page boundary. This doesn't actually work on the chip as 
         // designed, instead it wraps back around in the same page, yielding an 
         // invalid actual address
         byte IND()

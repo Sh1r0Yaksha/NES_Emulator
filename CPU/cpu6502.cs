@@ -471,6 +471,11 @@ namespace CPU
             AddrAbs &= 0x00FF;
             return 0x00;
         }	
+
+        // Address Mode: Zero Page with X Offset
+        // Fundamentally the same as Zero Page addressing, but the contents of the X Register
+        // is added to the supplied single byte address. This is useful for iterating through
+        // ranges within the first page.
         byte ZPX()
         {
             AddrAbs = (ushort)(Read(PC) + X);

@@ -1,5 +1,3 @@
-using System.Reflection.Emit;
-
 namespace CPU
 {
     public class cpu6502

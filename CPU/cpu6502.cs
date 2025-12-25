@@ -618,10 +618,36 @@ namespace CPU
 
 #region Opcodes 
         // Only Official Opcodes
+
+
         byte ADC()
         {
-            return 0x00;
-        }	
+            // Grab the data that we are adding to the accumulator
+        	Fetch();
+
+            // Add is performed in 16-bit domain for emulation to capture any
+            // carry bit, which will exist in bit 8 of the 16-bit word
+            Temp = (ushort)(A + Fetched + GetFlag(FLAGS6502.C));
+            
+            // The carry flag out exists in the high byte bit 0
+	        SetFlag(FLAGS6502.C, Temp > 255);
+
+            // The Zero flag is set if the result is 0
+	        SetFlag(FLAGS6502.Z, (Temp & 0x00FF) == 0);
+            
+            // The signed Overflow flag using complements
+	        SetFlag(FLAGS6502.V, (~(A ^ Fetched) & (A ^ Temp) & 0x0080) == 1);
+
+            // The negative flag is set to the most significant bit of the result
+	        SetFlag(FLAGS6502.N, (Temp & 0x80) == 1);
+
+            // Load the result into the accumulator (it's 8-bit dont forget!)
+	        A = (byte)(Temp & 0x00FF);
+
+            // This instruction has the potential to require an additional clock cycle
+	        return 0x01;
+	    }	
+
         byte AND()
         {
             return 0x00;
@@ -654,15 +680,15 @@ namespace CPU
         {
             return 0x00;
         }
-	byte BPL()
+	    byte BPL()
         {
             return 0x00;
         }
-	byte BRK()
+	    byte BRK()
         {
             return 0x00;
         }
-	byte BVC()
+	    byte BVC()
         {
             return 0x00;
         }
@@ -800,7 +826,23 @@ namespace CPU
         }
 	    byte SBC()
         {
-            return 0x00;
+            Fetch();
+
+            // Operating in 16-bit domain to capture carry out
+	
+            // We can invert the bottom 8 bits with bitwise xor
+            ushort value = (ushort)(Fetched ^ 0x00FF);
+
+            // Notice this is exactly the same as addition from here!
+	        Temp = (ushort)(A + value + GetFlag(FLAGS6502.C));
+
+            SetFlag(FLAGS6502.C, (Temp & 0xFF00) == 1);
+            SetFlag(FLAGS6502.Z, (Temp & 0x00FF) == 0);
+            SetFlag(FLAGS6502.V, ((Temp ^ A) & (Temp ^ value) & 0x0080) == 1);
+            SetFlag(FLAGS6502.N, (Temp & 0x0080) == 1);
+            A = (byte)(Temp & 0x00FF);
+
+            return 0x01;
         }
 
         byte SEC()

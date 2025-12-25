@@ -648,9 +648,16 @@ namespace CPU
 	        return 0x01;
 	    }	
 
+        // Instruction: Bitwise Logic AND
+        // Function:    A = A & M
+        // Flags Out:   N, Z
         byte AND()
         {
-            return 0x00;
+            Fetch();
+            A = (byte)(A & Fetched);
+            SetFlag(FLAGS6502.Z, A == 0x00);
+            SetFlag(FLAGS6502.N, (A & 0x80) == 1);
+            return 0x01;
         }
         byte ASL()
         {

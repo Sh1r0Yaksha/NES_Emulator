@@ -217,7 +217,7 @@ namespace CPU
             X = 0;
             Y = 0;
             STKP = 0xFD;
-            STATUS = 0x00 | (byte)FLAGS6502.U;
+            STATUS = 0x00 | (byte)FLAGS6502.U | (byte)FLAGS6502.I;
 
             // Clear internal helper variables
             AddrRel = 0x0000;
@@ -292,7 +292,7 @@ namespace CPU
         }
 
         // Perform one clock cycle's worth of update
-        public void clock()
+        public void Clock()
         {
             if (Cycles == 0)
             {
@@ -335,7 +335,7 @@ namespace CPU
         // clocking every cycle
         public bool Complete()
         {
-            return false;           
+            return Cycles == 0;           
         }
 #endregion
 
@@ -345,7 +345,7 @@ namespace CPU
         // The bits have different interpretations depending upon the context and 
         // instruction being executed.
         [Flags]
-        enum FLAGS6502 : byte
+        public enum FLAGS6502 : byte
         {
             C = (1 << 0),	// Carry Bit
             Z = (1 << 1),	// Zero
@@ -398,18 +398,18 @@ namespace CPU
         private ushort AddrRel = 0x00;   // Represents absolute address following a branch
         private byte Opcode = 0x00;   // Is the instruction byte
         private byte Cycles = 0;	   // Counts how many cycles the instruction has remaining
-        private uint ClockCount = 0;	   // A global accumulation of the number of clocks
+        public uint ClockCount = 0;	   // A global accumulation of the number of clocks
 
         private ushort STKP_Start = 0x0100;
         private ushort STKP_End = 0x01FF;
 
         // Linkage to the communications bus
-        private byte Read(ushort address)
+        public byte Read(ushort address)
         {
             return Bus.Read(address);
         }
 
-        private void Write(ushort address, byte data)
+        public void Write(ushort address, byte data)
         {
             Bus.Write(address, data);
         }
@@ -502,7 +502,7 @@ namespace CPU
         {
             AddrRel = Read(PC);
             PC++;
-            if ((AddrRel & 0x80) == 1) // 0x80 = 128
+            if ((AddrRel & 0x80) != 0) // 0x80 = 128
                 AddrRel |= 0xFF00;
             return 0x00;
         }
@@ -636,12 +636,12 @@ namespace CPU
 	        SetFlag(FLAGS6502.Z, (Temp & 0x00FF) == 0);
             
             // The signed Overflow flag using complements
-	        SetFlag(FLAGS6502.V, (~(A ^ Fetched) & (A ^ Temp) & 0x0080) == 1);
+	        SetFlag(FLAGS6502.V, (~(A ^ Fetched) & (A ^ Temp) & 0x0080) != 0);
 
             // The negative flag is set to the most significant bit of the result
-	        SetFlag(FLAGS6502.N, (Temp & 0x80) == 1);
+	        SetFlag(FLAGS6502.N, (Temp & 0x80) != 0);
 
-            // Load the result into the accumulator (it's 8-bit dont forget!)
+            // Load the result into the accumulator (it's 8-bit don't forget!)
 	        A = (byte)(Temp & 0x00FF);
 
             // This instruction has the potential to require an additional clock cycle
@@ -656,7 +656,7 @@ namespace CPU
             Fetch();
             A = (byte)(A & Fetched);
             SetFlag(FLAGS6502.Z, A == 0x00);
-            SetFlag(FLAGS6502.N, (A & 0x80) == 1);
+            SetFlag(FLAGS6502.N, (A & 0x80) != 0);
             return 0x01;
         }
         byte ASL()
@@ -704,8 +704,12 @@ namespace CPU
         {
             return 0x00;
         }
+
+        // Instruction: Clear Carry Flag
+        // Function:    C = 0
 	    byte CLC()
         {
+            SetFlag(FLAGS6502.C, false);
             return 0x00;
         }
 	    byte CLD()
@@ -772,10 +776,19 @@ namespace CPU
         {
             return 0x00;
         }
+
+        // Instruction: Load The Accumulator
+        // Function:    A = M
+        // Flags Out:   N, Z
 	    byte LDA()
         {
-            return 0x00;
+            Fetch();
+            A = Fetched;
+            SetFlag(FLAGS6502.Z, A == 0x00);
+            SetFlag(FLAGS6502.N, (A & 0x80) != 0);
+            return 0x01;
         }
+
 	    byte LDX()
         {
             return 0x00;
@@ -843,17 +856,20 @@ namespace CPU
             // Notice this is exactly the same as addition from here!
 	        Temp = (ushort)(A + value + GetFlag(FLAGS6502.C));
 
-            SetFlag(FLAGS6502.C, (Temp & 0xFF00) == 1);
+            SetFlag(FLAGS6502.C, (Temp & 0xFF00) != 0);
             SetFlag(FLAGS6502.Z, (Temp & 0x00FF) == 0);
-            SetFlag(FLAGS6502.V, ((Temp ^ A) & (Temp ^ value) & 0x0080) == 1);
-            SetFlag(FLAGS6502.N, (Temp & 0x0080) == 1);
+            SetFlag(FLAGS6502.V, ((Temp ^ A) & (Temp ^ value) & 0x0080) != 0);
+            SetFlag(FLAGS6502.N, (Temp & 0x0080) != 0);
             A = (byte)(Temp & 0x00FF);
 
             return 0x01;
         }
 
+        // Instruction: Set Carry Flag
+        // Function:    C = 1
         byte SEC()
         {
+            SetFlag(FLAGS6502.C, true);
             return 0x00;
         }
 	    byte SED()
@@ -903,6 +919,5 @@ namespace CPU
             return 0x00;
         }	
 #endregion
-
     }
 }

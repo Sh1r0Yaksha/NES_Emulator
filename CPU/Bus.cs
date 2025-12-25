@@ -3,8 +3,6 @@
     public static class Bus
     {
         // Devices on the bus
-        
-        // public static cpu6502 NES_CPU; // Maybe added but kept as a separate object
         public static byte[] RAM = new byte[64 * 1024]; // RAM is fixed to be 64KB but might change it to own object later
 
         public static void Write(ushort address, byte data)
@@ -16,7 +14,7 @@
 
         public static byte Read(ushort address, bool readOnly = false)
         {
-            if (address >= 0x00 && address <= 0xFF)
+            if (address >= 0x0000 && address <= 0xFFFF)
                 return RAM[address];
 
             return 0x00;

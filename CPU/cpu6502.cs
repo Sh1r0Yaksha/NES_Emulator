@@ -913,42 +913,106 @@ namespace CPU
             return 0x00;
         }
 
+        // Instruction: Decrement Value at Memory Location
+        // Function:    M = M - 1
+        // Flags Out:   N, Z
         byte DEC()
         {
+            Fetch();
+            Temp = (ushort)(Fetched - 1);
+            Write(AddrAbs, (byte)(Temp & 0x00FF));
+            SetFlag(FLAGS6502.Z, (Temp & 0x00FF) == 0x0000);
+            SetFlag(FLAGS6502.N, (Temp & 0x0080) != 0);
             return 0x00;
         }
+
+        // Instruction: Decrement X Register
+        // Function:    X = X - 1
+        // Flags Out:   N, Z
 	    byte DEX()
         {
+            X--;
+            SetFlag(FLAGS6502.Z, X == 0x00);
+            SetFlag(FLAGS6502.N, (X & 0x80) != 0);
             return 0x00;
         }
+
+
 	    byte DEY()
         {
+            Y--;
+            SetFlag(FLAGS6502.Z, Y == 0x00);
+            SetFlag(FLAGS6502.N, (Y & 0x80) != 0);
             return 0x00;
         }
+
+        // Instruction: Bitwise Logic XOR
+        // Function:    A = A xor M
+        // Flags Out:   N, Z
 	    byte EOR()
         {
-            return 0x00;
+            Fetch();
+            A = (byte)(A ^ Fetched);	
+            SetFlag(FLAGS6502.Z, A == 0x00);
+            SetFlag(FLAGS6502.N, (A & 0x80) != 0);
+            return 0x01;
         }
 
+        // Instruction: Increment Value at Memory Location
+        // Function:    M = M + 1
+        // Flags Out:   N, Z
         byte INC()
         {
-            return 0x00;
-        }
-	    byte INX()
-        {
-            return 0x00;
-        }
-	    byte INY()
-        {
-            return 0x00;
-        }
-	    byte JMP()
-        {
+            Fetch();
+            Temp = (ushort)(Fetched + 1);
+            Write(AddrAbs, (byte)(Temp & 0x00FF));
+            SetFlag(FLAGS6502.Z, (Temp & 0x00FF) == 0x0000);
+            SetFlag(FLAGS6502.N, (Temp & 0x0080) != 0);
             return 0x00;
         }
 
+        // Instruction: Increment X Register
+        // Function:    X = X + 1
+        // Flags Out:   N, Z
+	    byte INX()
+        {
+            X++;
+            SetFlag(FLAGS6502.Z, X == 0x00);
+            SetFlag(FLAGS6502.N, (X & 0x80) != 0);    
+            return 0x00;
+        }
+
+        // Instruction: Increment Y Register
+        // Function:    Y = Y + 1
+        // Flags Out:   N, Z
+	    byte INY()
+        {
+            Y++;
+            SetFlag(FLAGS6502.Z, Y == 0x00);
+            SetFlag(FLAGS6502.N, (Y & 0x80) != 0);    
+            return 0x00;
+        }
+
+        // Instruction: Jump To Location
+        // Function:    pc = address
+	    byte JMP()
+        {
+            PC = AddrAbs;
+            return 0x00;
+        }
+
+        // Instruction: Jump To Sub-Routine
+        // Function:    Push current pc to stack, pc = address  
         byte JSR()
         {
+            PC--;
+
+            Write((ushort)(STKP_Start + STKP), (byte)((PC >> 8) & 0x00FF));
+            STKP--;
+            Write((ushort)(STKP_Start + STKP), (byte)(PC & 0x00FF));
+            STKP--;
+
+            PC = AddrAbs;
             return 0x00;
         }
 
@@ -964,19 +1028,45 @@ namespace CPU
             return 0x01;
         }
 
+        // Instruction: Load The X Register
+        // Function:    X = M
+        // Flags Out:   N, Z
 	    byte LDX()
         {
-            return 0x00;
+            Fetch();
+            X = Fetched;
+            SetFlag(FLAGS6502.Z, X == 0x00);
+            SetFlag(FLAGS6502.N, (X & 0x80) != 0);
+            return 0x01;
         }
+
+        // Instruction: Load The Y Register
+        // Function:    Y = M
+        // Flags Out:   N, Z
 	    byte LDY()
         {
-            return 0x00;
+            Fetch();
+            Y = Fetched;
+            SetFlag(FLAGS6502.Z, Y == 0x00);
+            SetFlag(FLAGS6502.N, (Y & 0x80) != 0);
+            return 0x01;
         }
 
         byte LSR()
         {
+            Fetch();
+            SetFlag(FLAGS6502.C, (Fetched & 0x0001) != 0);
+            Temp = (ushort)(Fetched >> 1);	
+            SetFlag(FLAGS6502.Z, (Temp & 0x00FF) == 0x0000);
+            SetFlag(FLAGS6502.N, (Temp & 0x0080) != 0);
+            if (Lookup[Opcode].AddressMode == IMP)
+                A = (byte)(Temp & 0x00FF);
+            else
+                Write(AddrAbs, (byte)(Temp & 0x00FF));
             return 0x00;
         }
+
+
 	    byte NOP()
         {
             // Sadly not all NOPs are equal, Ive added a few here
@@ -994,44 +1084,114 @@ namespace CPU
             }
             return 0x00;
         }
+
+        // Instruction: Bitwise Logic OR
+        // Function:    A = A | M
+        // Flags Out:   N, Z
 	    byte ORA()
         {
-            return 0x00;
+            Fetch();
+            A = (byte)(A | Fetched);
+            SetFlag(FLAGS6502.Z, A == 0x00);
+            SetFlag(FLAGS6502.N, (A & 0x80) != 0);
+            return 0x01;
         }
+
+        // Instruction: Push Accumulator to Stack
+        // Function:    A -> stack
 	    byte PHA()
         {
+            Write((ushort)(STKP_Start + STKP), A);
+            STKP--;
             return 0x00;
         }
 
+        // Instruction: Push Status Register to Stack
+        // Function:    status -> stack
+        // Note:        Break flag is set to 1 before push
         byte PHP()
         {
+            Write((ushort)(STKP_Start + STKP), (byte)(STATUS | (byte)FLAGS6502.B | (byte)FLAGS6502.U));
+            SetFlag(FLAGS6502.B, false);
+            SetFlag(FLAGS6502.U, true);
+            STKP--;
             return 0x00;
         }
+
+        // Instruction: Pop Accumulator off Stack
+        // Function:    A <- stack
+        // Flags Out:   N, Z
 	    byte PLA()
         {
+            STKP++;
+            A = Read((ushort)(STKP_Start + STKP));
+            SetFlag(FLAGS6502.Z, A == 0x00);
+            SetFlag(FLAGS6502.N, (A & 0x80) != 0);
             return 0x00;
         }
+
+        // Instruction: Pop Status Register off Stack
+        // Function:    Status <- stack
 	    byte PLP()
         {
+            STKP++;
+            STATUS = Read((ushort)(STKP_Start + STKP));
+            SetFlag(FLAGS6502.U, true);
             return 0x00;
         }
+
 	    byte ROL()
         {
+            Fetch();
+            Temp = (ushort)((Fetched << 1) | GetFlag(FLAGS6502.C));
+            SetFlag(FLAGS6502.C, (Temp & 0xFF00) != 0);
+            SetFlag(FLAGS6502.Z, (Temp & 0x00FF) == 0x0000);
+            SetFlag(FLAGS6502.N, (Temp & 0x0080) != 0);
+            if (Lookup[Opcode].AddressMode == IMP)
+                A = (byte)(Temp & 0x00FF);
+            else
+                Write(AddrAbs, (byte)(Temp & 0x00FF));
             return 0x00;
         }
 
         byte ROR()
         {
+            Fetch();
+            Temp = (ushort)((GetFlag(FLAGS6502.C) << 7) | (Fetched >> 1));
+            SetFlag(FLAGS6502.C, (Fetched & 0x01) != 0);
+            SetFlag(FLAGS6502.Z, (Temp & 0x00FF) == 0x00);
+            SetFlag(FLAGS6502.N, (Temp & 0x0080) != 0);
+            if (Lookup[Opcode].AddressMode == IMP)
+                A = (byte)(Temp & 0x00FF);
+            else
+                Write(AddrAbs, (byte)(Temp & 0x00FF));
             return 0x00;
         }
+
 	    byte RTI()
         {
+            STKP++;
+            STATUS = Read((ushort)(STKP_Start + STKP));
+            STATUS &= (byte)~FLAGS6502.B;
+            STATUS &= (byte)~FLAGS6502.U;
+
+            STKP++;
+            PC = Read((ushort)(STKP_Start + STKP));
+            STKP++;
+            PC |= (ushort)(Read((ushort)(STKP_Start + STKP)) << 8);
             return 0x00;
         }
 	    byte RTS()
         {
+            STKP++;
+            PC = Read((ushort)(STKP_Start + STKP));
+            STKP++;
+            PC |= (ushort)(Read((ushort)(STKP_Start + STKP)) << 8);
+            
+            PC++;
             return 0x00;
         }
+
 	    byte SBC()
         {
             Fetch();
@@ -1060,50 +1220,107 @@ namespace CPU
             SetFlag(FLAGS6502.C, true);
             return 0x00;
         }
+
+        // Instruction: Set Decimal Flag
+        // Function:    D = 1   
 	    byte SED()
         {
+            SetFlag(FLAGS6502.D, true);
             return 0x00;
         }
+
+        // Instruction: Set Interrupt Flag / Enable Interrupts
+        // Function:    I = 1
 	    byte SEI()
         {
+            SetFlag(FLAGS6502.I, true);
             return 0x00;
         }
+
+        // Instruction: Store Accumulator at Address
+        // Function:    M = A
 	    byte STA()
         {
+            Write(AddrAbs, A);
             return 0x00;
         }
 
+        // Instruction: Store X Register at Address
+        // Function:    M = X
         byte STX()
         {
-            return 0x00;
-        }
-	    byte STY()
-        {
-            return 0x00;
-        }
-	    byte TAX()
-        {
-            return 0x00;
-        }
-	    byte TAY()
-        {
+            Write(AddrAbs, X);
             return 0x00;
         }
 
+        // Instruction: Store Y Register at Address
+        // Function:    M = Y
+	    byte STY()
+        {
+             Write(AddrAbs, Y);
+            return 0x00;
+        }
+
+        // Instruction: Transfer Accumulator to X Register
+        // Function:    X = A
+        // Flags Out:   N, Z
+	    byte TAX()
+        {
+            X = A;
+            SetFlag(FLAGS6502.Z, X == 0x00);
+            SetFlag(FLAGS6502.N, (X & 0x80) != 0);
+            return 0x00;
+        }
+
+        // Instruction: Transfer Accumulator to Y Register
+        // Function:    Y = A
+        // Flags Out:   N, Z
+	    byte TAY()
+        {
+            Y = A;
+            SetFlag(FLAGS6502.Z, Y == 0x00);
+            SetFlag(FLAGS6502.N, (Y & 0x80) != 0);
+            return 0x00;
+        }
+
+        // Instruction: Transfer Stack Pointer to X Register
+        // Function:    X = stack pointer
+        // Flags Out:   N, Z
         byte TSX()
         {
+            X = STKP;
+            SetFlag(FLAGS6502.Z, X == 0x00);
+            SetFlag(FLAGS6502.N, (X & 0x80) != 0);
             return 0x00;
         }
+
+        // Instruction: Transfer X Register to Accumulator
+        // Function:    A = X
+        // Flags Out:   N, Z
 	    byte TXA()
         {
+            A = X;
+            SetFlag(FLAGS6502.Z, A == 0x00);
+            SetFlag(FLAGS6502.N, (A & 0x80) != 0);
             return 0x00;
         }
+
+        // Instruction: Transfer X Register to Stack Pointer
+        // Function:    stack pointer = X
 	    byte TXS()
         {
+            STKP = X;
             return 0x00;
         }
+
+        // Instruction: Transfer Y Register to Accumulator
+        // Function:    A = Y
+        // Flags Out:   N, Z
 	    byte TYA()
         {
+            A = Y;
+            SetFlag(FLAGS6502.Z, A == 0x00);
+            SetFlag(FLAGS6502.N, (A & 0x80) != 0);
             return 0x00;
         }	
 #endregion

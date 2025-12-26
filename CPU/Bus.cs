@@ -8,16 +8,18 @@
         public static void Write(ushort address, byte data)
         {
             // 0x00 refers to location 0 in RAM, while 0xFF refers to location 255
-            if (address >= 0x0000 && address <= 0xFFFF)
+            if (address < RAM.Length)
 		        RAM[address] = data;
         }
 
         public static byte Read(ushort address, bool readOnly = false)
         {
-            if (address >= 0x0000 && address <= 0xFFFF)
+            // Check against the ARRAY SIZE, not 0xFFFF
+            if (address < RAM.Length) 
                 return RAM[address];
 
-            return 0x00;
+            // If address is outside RAM (e.g., ROM or unmapped), return 0 for now
+            return 0x00; 
         }
     }
 }

@@ -8,137 +8,168 @@ namespace tests
     {
         static void Main(string[] args)
         {
-            cpu6502 nes = new cpu6502();
+            // --- SETUP ---
+            cpu6502 cpu = new cpu6502();
 
-            TestSBC(nes);
-            ResetSystem(nes);
+            // Load Nestest ROM (Ensure 64KB RAM as discussed before)
+            LoadNestest(cpu);
 
-            // ==========================================
-            // EXECUTION LOOP
-            // ==========================================
-            
-            while (true)
+            // Setup CPU Start State for Nestest
+            cpu.PC = 0xC000;
+            cpu.Cycles = 7;
+            cpu.SetFlag(cpu6502.FLAGS6502.I, true);
+            cpu.STKP = 0xFD;
+
+            // --- STEP 1: CREATE COVERAGE DICTIONARY ---
+            // Key = Instruction Name (e.g., "LDA"), Value = Has it passed?
+            Dictionary<string, bool> coverage = new Dictionary<string, bool>();
+
+            // Iterate through your CPU's Lookup table to populate keys
+            // Assuming cpu.Lookup is accessible or you have a static list
+            foreach (var instruction in cpu.Lookup) 
             {
-                // 1. Step the CPU until one complete instruction finishes
-                do
+                if (!string.IsNullOrEmpty(instruction.Name) && !coverage.ContainsKey(instruction.Name))
                 {
-                    nes.Clock();
-                    Console.WriteLine($"Ran nes Clock {nes.ClockCount} times");
-                } 
-                while (!nes.Complete());
-
-                // 2. Print the state AFTER the instruction finished
-                Console.WriteLine(GetDebugState(nes));
-
-                // 3. Pause for user input
-                if (Console.ReadKey(true).Key == ConsoleKey.Escape) break;
+                    coverage.Add(instruction.Name, false);
+                }
             }
-        }
-        public static void ResetSystem(cpu6502 nes)
-        {
-            // ==========================================
-            // SYSTEM STARTUP
-            // ==========================================
 
-            // Set Reset Vector to 0x8000 so the CPU knows where to look
-            nes.Write(0xFFFC, 0x00);
-            nes.Write(0xFFFD, 0x80);
+            // --- STEP 2: LOAD LOG LINES ---
+            string[] logLines = File.ReadAllLines("nestest.log");
+            Console.WriteLine($"Loaded {logLines.Length} lines of golden log.");
 
-            // Perform Reset
-            nes.Reset();
-
-            // 1. FLUSH RESET CYCLES
-            // The Reset takes 8 cycles. This loop runs them all so we start fresh.
-            while (!nes.Complete())
+            // --- STEP 3: RUN AND COMPARE ---
+            int lineNum = 0;
+            try
             {
-                nes.Clock();
-                Console.WriteLine($"Ran nes Clock {nes.ClockCount} times");
+                foreach (string rawLine in logLines)
+                {
+                    lineNum++;
+
+                    // 1. Skip empty strings immediately
+                    if (string.IsNullOrWhiteSpace(rawLine)) continue;
+
+                    // 2. Parse the line
+                    LogEntry expected = LogEntry.FromLine(rawLine);
+
+                    // 3. CRITICAL CHECK: Did parsing fail? (BOM, Header, or bad format)
+                    if (expected == null)
+                    {
+                        // Just skip this line and move to the next one
+                        continue; 
+                    }
+
+                    // Mark Instruction as Tested
+                    byte opcode = Bus.Read(cpu.PC, true);
+                    string instName = string.Empty;
+                    
+                    // Safety check for lookup table bounds
+                    if (cpu.Lookup[opcode].Name != null)
+                    {
+                        instName = cpu.Lookup[opcode].Name;
+                        if (coverage.ContainsKey(instName)) coverage[instName] = true;
+                    }
+
+                    // 4. NOW it is safe to compare
+                    if (cpu.PC != expected.PC ||
+                        cpu.A != expected.A ||
+                        cpu.X != expected.X ||
+                        cpu.Y != expected.Y ||
+                        cpu.STKP != expected.STKP || 
+                        (cpu.STATUS & 0xEF) != (expected.P & 0xEF))
+                    {
+                        // 1. Read the opcode at the current PC to see what instruction failed
+                        
+
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine("\n[FAILED] Mismatch at Line " + lineNum);
+                        Console.WriteLine($"Instruction: {instName} (Opcode: {opcode:X2})");
+                        Console.WriteLine($"Expected: PC:{expected.PC:X4} A:{expected.A:X2} X:{expected.X:X2} Y:{expected.Y:X2} P:{expected.P:X2} SP:{expected.STKP:X2}");
+                        Console.WriteLine($"Actual:   PC:{cpu.PC:X4} A:{cpu.A:X2} X:{cpu.X:X2} Y:{cpu.Y:X2} P:{cpu.STATUS:X2} SP:{cpu.STKP:X2}");
+                        Console.ResetColor();
+                        return; 
+                    }
+
+                    // ... (Rest of your execution logic: Mark coverage, Clock loop) ...
+                
+                    // Execute
+                    cpu.Clock();
+                    while (!cpu.Complete()) cpu.Clock();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Critical Error at line {lineNum}: {ex.Message}");
+                Console.WriteLine(ex.StackTrace); // Print stack trace to see exactly where
+            }
+
+            // --- STEP 4: PRINT COVERAGE REPORT ---
+            Console.WriteLine("\n--- Instruction Coverage Report ---");
+            int passed = coverage.Count(x => x.Value);
+            int total = coverage.Count;
+            
+            Console.WriteLine($"Coverage: {passed}/{total} Instructions executed.");
+            
+            // Print Untested Instructions
+            Console.WriteLine("Untested Instructions:");
+            foreach (var item in coverage.Where(x => x.Value == false))
+            {
+                Console.Write(item.Key + " ");
+            }
+            Console.WriteLine();
+        }
+
+        static void LoadNestest(cpu6502 cpu)
+        {
+            string file = "nestest.nes";
+            if (!File.Exists(file))
+            {
+                Console.WriteLine("Error: nestest.nes not found!");
+                return;
+            }
+
+            byte[] romData = File.ReadAllBytes(file);
+
+            // Skip 16-byte header, load 16KB PRG
+            int prgStart = 16;
+            int prgSize = 16384;
+
+            for (int i = 0; i < prgSize; i++)
+            {
+                byte b = romData[prgStart + i];
+                // Mirror at 0xC000 and 0x8000
+                cpu.Write((ushort)(0xC000 + i), b);
+                cpu.Write((ushort)(0x8000 + i), b);
             }
             
-            Console.WriteLine("Reset Complete. System Ready at 0x8000.");
-            Console.WriteLine("Press SPACE to step through instructions.");
-            Console.WriteLine("---------------------------------------------------------------");
+            // Set Reset Vector (FFFC/FFFD) to C000 just in case your CPU resets
+            cpu.Write(0xFFFC, 0x00);
+            cpu.Write(0xFFFD, 0xC0);
         }
-        public static void TestADC(cpu6502 nes)
+
+        static string LogState(cpu6502 cpu)
         {
-            // ==========================================
-            // PROGRAM: TEST ADC
-            // ==========================================
+            // The golden log format has a lot of extra info (Disassembly, PPU, Cycles).
+            // We only have the CPU right now, so we match the REGISTERS column.
             
-            // 0x8000: LDA #$00 (Load 0 into Accumulator)
-            nes.Write(0x8000, 0xA9);
-            nes.Write(0x8001, 0x00);
+            // NESTEST LOG LINE EXAMPLE:
+            // C000  4C F5 C5  JMP $C5F5                       A:00 X:00 Y:00 P:24 SP:FD PPU:  0, 21 CYC:7
+            
+            // OUR LOG LINE:
+            // C000  A:00 X:00 Y:00 P:24 SP:FD
 
-            // 0x8002: CLC (Clear Carry Flag) - Opcode 0x18
-            // If we don't do this, a random Carry bit could mess up our math.
-            nes.Write(0x8002, 0x18);
+            // NOTE ON STATUS REGISTER (P):
+            // The 'Unused' bit (bit 5) is physically always read as 1 on the NES.
+            // We force it to 1 here for the log to match Nintendulator.
+            byte p = (byte)(cpu.STATUS | 0x20);
 
-            // 0x8003: ADC #$0A (Add 10 decimal) - Opcode 0x69
-            nes.Write(0x8003, 0x69);
-            nes.Write(0x8004, 0x0A);
-
-            // 0x8005: ADC #$FF (Add 255 decimal) - Opcode 0x69
-            // This tests the Overflow/Carry behavior.
-            // 10 + 255 = 265. 
-            // In 8-bit math: 265 wraps to 9. Carry flag should turn ON.
-            nes.Write(0x8005, 0x69);
-            nes.Write(0x8006, 0xFF);
-        }
-
-        public static void TestSBC(cpu6502 nes)
-        {
-            // ==========================================
-            // PROGRAM: TEST SBC
-            // ==========================================
-
-            // 0x8000: LDA #$0A (Load 10 decimal) - Opcode A9
-            nes.Write(0x8000, 0xA9);
-            nes.Write(0x8001, 0x0A);
-
-            // 0x8002: SEC (Set Carry Flag) - Opcode 38
-            // REQUIRED before starting a standard subtraction chain.
-            nes.Write(0x8002, 0x38);
-
-            // 0x8003: SBC #$03 (Subtract 3) - Opcode E9
-            // Math: 10 - 3 = 7.
-            // Carry Flag should stay 1 (True) because result >= 0.
-            nes.Write(0x8003, 0xE9);
-            nes.Write(0x8004, 0x03);
-
-            // 0x8005: SBC #$08 (Subtract 8) - Opcode E9
-            // Math: 7 - 8 = -1 (wraps to 255 / 0xFF).
-            // Carry Flag should become 0 (False) to indicate a Borrow occurred.
-            nes.Write(0x8005, 0xE9);
-            nes.Write(0x8006, 08);
-        }
-
-        // Add this inside your CPU class
-        public static string GetFlagString(byte status)
-        {
-            // Checks each bit. If 1, prints the letter. If 0, prints a dot.
-            return string.Format("{0}{1}{2}{3}{4}{5}{6}{7}",
-                (status & (byte)cpu6502.FLAGS6502.N) > 0 ? "N" : ".",
-                (status & (byte)cpu6502.FLAGS6502.V) > 0 ? "V" : ".",
-                "U", // The unused bit is usually ignored or just marked
-                (status & (byte)cpu6502.FLAGS6502.B) > 0 ? "B" : ".",
-                (status & (byte)cpu6502.FLAGS6502.D) > 0 ? "D" : ".",
-                (status & (byte)cpu6502.FLAGS6502.I) > 0 ? "I" : ".",
-                (status & (byte)cpu6502.FLAGS6502.Z) > 0 ? "Z" : ".",
-                (status & (byte)cpu6502.FLAGS6502.C) > 0 ? "C" : "."
-            );
-        }
-
-        public static string GetDebugState(cpu6502 cpu)
-        {
-            return string.Format(
-                "PC:{0:X4}  A:{1:X2} X:{2:X2} Y:{3:X2}  SP:{4:X2}  P:{5:X2} [{6}]",
-                cpu.PC,              // Program Counter (16-bit)
-                cpu.A,               // Accumulator
-                cpu.X,               // X Register
-                cpu.Y,               // Y Register
-                cpu.STKP,            // Stack Pointer
-                cpu.STATUS,          // Status Hex Value
-                GetFlagString(cpu.STATUS)  // The helper function we wrote earlier
+            return string.Format("{0:X4}  A:{1:X2} X:{2:X2} Y:{3:X2} P:{4:X2} SP:{5:X2}",
+                cpu.PC,
+                cpu.A,
+                cpu.X,
+                cpu.Y,
+                p, 
+                cpu.STKP
             );
         }
     }

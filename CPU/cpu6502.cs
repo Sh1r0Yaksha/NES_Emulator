@@ -360,12 +360,12 @@ namespace CPU
 #endregion
 
 #region Internal CPU Instructions
-        private byte GetFlag(FLAGS6502 f)
+        public byte GetFlag(FLAGS6502 f)
         {
             return (STATUS & (byte)f) > 0 ? (byte)1 : (byte)0;
         }
 
-        private void SetFlag(FLAGS6502 f, bool v)
+        public void SetFlag(FLAGS6502 f, bool v)
         {
             if (v)
 		        STATUS |= (byte)f;
@@ -395,9 +395,9 @@ namespace CPU
         private byte Fetched = 0x00;   // Represents the working input value to the ALU
         private ushort Temp = 0x0000; // A convenience variable used everywhere
         private ushort AddrAbs = 0x0000; // All used memory addresses end up in here
-        private ushort AddrRel = 0x00;   // Represents absolute address following a branch
+        private sbyte AddrRel = 0x00;   // Represents absolute address following a branch
         private byte Opcode = 0x00;   // Is the instruction byte
-        private byte Cycles = 0;	   // Counts how many cycles the instruction has remaining
+        public byte Cycles = 0;	   // Counts how many cycles the instruction has remaining
         public uint ClockCount = 0;	   // A global accumulation of the number of clocks
 
         private ushort STKP_Start = 0x0100;
@@ -500,10 +500,8 @@ namespace CPU
         // you cant directly branch to any address in the addressable range.	
         byte REL()
         {
-            AddrRel = Read(PC);
+            AddrRel = (sbyte)Read(PC);
             PC++;
-            if ((AddrRel & 0x80) != 0) // 0x80 = 128
-                AddrRel |= 0xFF00;
             return 0x00;
         }
 
@@ -659,49 +657,188 @@ namespace CPU
             SetFlag(FLAGS6502.N, (A & 0x80) != 0);
             return 0x01;
         }
+
+        // Instruction: Arithmetic Shift Left
+        // Function:    A = C <- (A << 1) <- 0
+        // Flags Out:   N, Z, C
         byte ASL()
         {
+            Fetch();
+            Temp = (ushort)(Fetched << 1);
+            SetFlag(FLAGS6502.C, (Temp & 0xFF00) != 0);
+            SetFlag(FLAGS6502.Z, (Temp & 0x00FF) == 0x00);
+            SetFlag(FLAGS6502.N, (Temp & 0x80) != 0);
+            if (Lookup[Opcode].AddressMode == IMP)
+                A = (byte)(Temp & 0x00FF);
+            else
+                Write(AddrAbs, (byte)(Temp & 0x00FF));
             return 0x00;
         }	
+
+        // Instruction: Branch if Carry Clear
+        // Function:    if(C == 0) pc = address 
         byte BCC()
         {
-            return 0x00;
-        }
-        byte BCS()
-        {
-            return 0x00;
-        }
-        byte BEQ()
-        {
-            return 0x00;
-        }	
-        byte BIT()
-        {
-            return 0x00;
-        }	
-        byte BMI()
-        {
-            return 0x00;
-        }
-        byte BNE()
-        {
-            return 0x00;
-        }
-	    byte BPL()
-        {
-            return 0x00;
-        }
-	    byte BRK()
-        {
-            return 0x00;
-        }
-	    byte BVC()
-        {
+            if (GetFlag(FLAGS6502.C) == 0x00)
+            {
+                Cycles++;
+                AddrAbs = (ushort)(PC + AddrRel);
+                
+                if((AddrAbs & 0xFF00) != (PC & 0xFF00))
+                    Cycles++;
+                
+                PC = AddrAbs;
+            }
             return 0x00;
         }
 
+        // Instruction: Branch if Carry Set
+        // Function:    if(C != 0) pc = address 
+        byte BCS()
+        {
+            if (GetFlag(FLAGS6502.C) != 0)
+            {
+                Cycles++;
+                AddrAbs = (ushort)(PC + AddrRel);
+
+                if ((AddrAbs & 0xFF00) != (PC & 0xFF00))
+                    Cycles++;
+
+                PC = AddrAbs;
+            }
+            return 0x00;
+        }
+
+        // Instruction: Branch if Equal
+        // Function:    if(Z != 0) pc = address
+        byte BEQ()
+        {
+            if (GetFlag(FLAGS6502.Z) != 0)
+            {
+                Cycles++;
+                AddrAbs = (ushort)(PC + AddrRel);
+
+                if ((AddrAbs & 0xFF00) != (PC & 0xFF00))
+                    Cycles++;
+
+                PC = AddrAbs;
+            }
+            return 0x00;
+        }	
+
+
+        byte BIT()
+        {
+            Fetch();
+            Temp = (ushort)(A & Fetched);
+            SetFlag(FLAGS6502.Z, (Temp & 0x00FF) == 0x00);
+            SetFlag(FLAGS6502.N, (Fetched & (1 << 7)) != 0x00);
+            SetFlag(FLAGS6502.V, (Fetched & (1 << 6)) != 0x00);
+            return 0x00;
+        }	
+
+        // Instruction: Branch if Negative
+        // Function:    if(N != 0) pc = address
+        byte BMI()
+        {
+            if (GetFlag(FLAGS6502.N) != 0)
+            {
+                Cycles++;
+                AddrAbs = (ushort)(PC + AddrRel);
+
+                if ((AddrAbs & 0xFF00) != (PC & 0xFF00))
+                    Cycles++;
+
+                PC = AddrAbs;
+            }
+            return 0x00;
+        }
+
+        // Instruction: Branch if Not Equal
+        // Function:    if(Z == 0) pc = address
+        byte BNE()
+        {
+            if (GetFlag(FLAGS6502.Z) == 0)
+            {
+                Cycles++;
+                AddrAbs = (ushort)(PC + AddrRel);
+
+                if ((AddrAbs & 0xFF00) != (PC & 0xFF00))
+                    Cycles++;
+
+                PC = AddrAbs;
+            }
+            return 0x00;
+        }
+
+        // Instruction: Branch if Positive
+        // Function:    if(N == 0) pc = address
+	    byte BPL()
+        {
+            if (GetFlag(FLAGS6502.N) == 0)
+            {
+                Cycles++;
+                AddrAbs = (ushort)(PC + AddrRel);
+
+                if ((AddrAbs & 0xFF00) != (PC & 0xFF00))
+                    Cycles++;
+
+                PC = AddrAbs;
+            }
+            return 0x00;
+        }
+
+        // Instruction: Break
+        // Function:    Program Sourced Interrupt
+	    byte BRK()
+        {
+            PC++;
+            
+            SetFlag(FLAGS6502.I, true);
+            Write((ushort)(STKP_Start + STKP), (byte)((PC >> 8) & 0x00FF));
+            STKP--;
+            Write((ushort)(STKP_Start + STKP), (byte)(PC & 0x00FF));
+            STKP--;
+
+            SetFlag(FLAGS6502.B, true);
+            Write((ushort)(STKP_Start + STKP), STATUS);
+            STKP--;
+            SetFlag(FLAGS6502.B, false);
+
+            PC = (ushort)(Read(0xFFFE) | (Read(0xFFFF) << 8));
+            return 0x00;
+        }
+
+        // Instruction: Branch if Overflow Clear
+        // Function:    if(V == 0) pc = address
+	    byte BVC()
+        {
+            if (GetFlag(FLAGS6502.V) == 0)
+            {
+                Cycles++;
+                AddrAbs = (ushort)(PC + AddrRel);
+
+                if ((AddrAbs & 0xFF00) != (PC & 0xFF00))
+                    Cycles++;
+
+                PC = AddrAbs;
+            }
+            return 0x00;
+        }
+        // Instruction: Branch if Overflow Set
+        // Function:    if(V == 1) pc = address
         byte BVS()
         {
+            if (GetFlag(FLAGS6502.V) != 0)
+            {
+                Cycles++;
+                AddrAbs = (ushort)(PC + AddrRel);
+
+                if ((AddrAbs & 0xFF00) != (PC & 0xFF00))
+                    Cycles++;
+
+                PC = AddrAbs;
+            }
             return 0x00;
         }
 
@@ -712,29 +849,67 @@ namespace CPU
             SetFlag(FLAGS6502.C, false);
             return 0x00;
         }
+
+        // Instruction: Clear Decimal Flag
+        // Function:    D = 0
 	    byte CLD()
         {
-            return 0x00;
-        }
-	    byte CLI()
-        {
+            SetFlag(FLAGS6502.D, false);
             return 0x00;
         }
 
+        // Instruction: Disable Interrupts / Clear Interrupt Flag
+        // Function:    I = 0
+	    byte CLI()
+        {
+            SetFlag(FLAGS6502.I, false);
+            return 0x00;
+        }
+
+        // Instruction: Clear Overflow Flag
+        // Function:    V = 0
         byte CLV()
         {
+            SetFlag(FLAGS6502.V, false);
             return 0x00;
         }
+
+        // Instruction: Compare Accumulator
+        // Function:    C <- A >= M      Z <- (A - M) == 0
+        // Flags Out:   N, C, Z
 	    byte CMP()
         {
-            return 0x00;
+            Fetch();
+            Temp = (ushort)(A - Fetched);
+            SetFlag(FLAGS6502.C, A >= Fetched);
+            SetFlag(FLAGS6502.Z, (Temp & 0x00FF) == 0x0000);
+            SetFlag(FLAGS6502.N, (Temp & 0x0080) != 0);
+            return 0x01;
         }
+
+        // Instruction: Compare X Register
+        // Function:    C <- X >= M      Z <- (X - M) == 0
+        // Flags Out:   N, C, Z
 	    byte CPX()
         {
+            Fetch();
+            Temp = (ushort)(X - Fetched);
+            SetFlag(FLAGS6502.C, X >= Fetched);
+            SetFlag(FLAGS6502.Z, (Temp & 0x00FF) == 0x0000);
+            SetFlag(FLAGS6502.N, (Temp & 0x0080) != 0);   
             return 0x00;
         }
+
+        // Instruction: Compare Y Register
+        // Function:    C <- Y >= M      Z <- (Y - M) == 0
+        // Flags Out:   N, C, Z
 	    byte CPY()
         {
+            Fetch();
+            Temp = (ushort)(Y - Fetched);
+            SetFlag(FLAGS6502.C, Y >= Fetched);
+            SetFlag(FLAGS6502.Z, (Temp & 0x00FF) == 0x0000);
+            SetFlag(FLAGS6502.N, (Temp & 0x0080) != 0);   
             return 0x00;
         }
 
@@ -804,6 +979,19 @@ namespace CPU
         }
 	    byte NOP()
         {
+            // Sadly not all NOPs are equal, Ive added a few here
+            // based on https://wiki.nesdev.com/w/index.php/CPU_unofficial_opcodes
+            // and will add more based on game compatibility, and ultimately
+            // I'd like to cover all illegal opcodes too
+            switch (Opcode) {
+            case 0x1C:
+            case 0x3C:
+            case 0x5C:
+            case 0x7C:
+            case 0xDC:
+            case 0xFC:
+                return 1;
+            }
             return 0x00;
         }
 	    byte ORA()

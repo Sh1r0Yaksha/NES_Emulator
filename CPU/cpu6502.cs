@@ -360,12 +360,12 @@ namespace CPU
 #endregion
 
 #region Internal CPU Instructions
-        private byte GetFlag(FLAGS6502 f)
+        public byte GetFlag(FLAGS6502 f)
         {
             return (STATUS & (byte)f) > 0 ? (byte)1 : (byte)0;
         }
 
-        private void SetFlag(FLAGS6502 f, bool v)
+        public void SetFlag(FLAGS6502 f, bool v)
         {
             if (v)
 		        STATUS |= (byte)f;
@@ -397,7 +397,7 @@ namespace CPU
         private ushort AddrAbs = 0x0000; // All used memory addresses end up in here
         private sbyte AddrRel = 0x00;   // Represents absolute address following a branch
         private byte Opcode = 0x00;   // Is the instruction byte
-        private byte Cycles = 0;	   // Counts how many cycles the instruction has remaining
+        public byte Cycles = 0;	   // Counts how many cycles the instruction has remaining
         public uint ClockCount = 0;	   // A global accumulation of the number of clocks
 
         private ushort STKP_Start = 0x0100;
@@ -849,29 +849,67 @@ namespace CPU
             SetFlag(FLAGS6502.C, false);
             return 0x00;
         }
+
+        // Instruction: Clear Decimal Flag
+        // Function:    D = 0
 	    byte CLD()
         {
-            return 0x00;
-        }
-	    byte CLI()
-        {
+            SetFlag(FLAGS6502.D, false);
             return 0x00;
         }
 
+        // Instruction: Disable Interrupts / Clear Interrupt Flag
+        // Function:    I = 0
+	    byte CLI()
+        {
+            SetFlag(FLAGS6502.I, false);
+            return 0x00;
+        }
+
+        // Instruction: Clear Overflow Flag
+        // Function:    V = 0
         byte CLV()
         {
+            SetFlag(FLAGS6502.V, false);
             return 0x00;
         }
+
+        // Instruction: Compare Accumulator
+        // Function:    C <- A >= M      Z <- (A - M) == 0
+        // Flags Out:   N, C, Z
 	    byte CMP()
         {
-            return 0x00;
+            Fetch();
+            Temp = (ushort)(A - Fetched);
+            SetFlag(FLAGS6502.C, A >= Fetched);
+            SetFlag(FLAGS6502.Z, (Temp & 0x00FF) == 0x0000);
+            SetFlag(FLAGS6502.N, (Temp & 0x0080) != 0);
+            return 0x01;
         }
+
+        // Instruction: Compare X Register
+        // Function:    C <- X >= M      Z <- (X - M) == 0
+        // Flags Out:   N, C, Z
 	    byte CPX()
         {
+            Fetch();
+            Temp = (ushort)(X - Fetched);
+            SetFlag(FLAGS6502.C, X >= Fetched);
+            SetFlag(FLAGS6502.Z, (Temp & 0x00FF) == 0x0000);
+            SetFlag(FLAGS6502.N, (Temp & 0x0080) != 0);   
             return 0x00;
         }
+
+        // Instruction: Compare Y Register
+        // Function:    C <- Y >= M      Z <- (Y - M) == 0
+        // Flags Out:   N, C, Z
 	    byte CPY()
         {
+            Fetch();
+            Temp = (ushort)(Y - Fetched);
+            SetFlag(FLAGS6502.C, Y >= Fetched);
+            SetFlag(FLAGS6502.Z, (Temp & 0x00FF) == 0x0000);
+            SetFlag(FLAGS6502.N, (Temp & 0x0080) != 0);   
             return 0x00;
         }
 

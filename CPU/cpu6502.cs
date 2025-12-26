@@ -395,7 +395,7 @@ namespace CPU
         private byte Fetched = 0x00;   // Represents the working input value to the ALU
         private ushort Temp = 0x0000; // A convenience variable used everywhere
         private ushort AddrAbs = 0x0000; // All used memory addresses end up in here
-        private ushort AddrRel = 0x00;   // Represents absolute address following a branch
+        private sbyte AddrRel = 0x00;   // Represents absolute address following a branch
         private byte Opcode = 0x00;   // Is the instruction byte
         private byte Cycles = 0;	   // Counts how many cycles the instruction has remaining
         public uint ClockCount = 0;	   // A global accumulation of the number of clocks
@@ -500,10 +500,8 @@ namespace CPU
         // you cant directly branch to any address in the addressable range.	
         byte REL()
         {
-            AddrRel = Read(PC);
+            AddrRel = (sbyte)Read(PC);
             PC++;
-            if ((AddrRel & 0x80) != 0) // 0x80 = 128
-                AddrRel |= 0xFF00;
             return 0x00;
         }
 
@@ -681,7 +679,7 @@ namespace CPU
         // Function:    if(C == 0) pc = address 
         byte BCC()
         {
-            if (GetFlag(FLAGS6502.C) == 0)
+            if (GetFlag(FLAGS6502.C) == 0x00)
             {
                 Cycles++;
                 AddrAbs = (ushort)(PC + AddrRel);
@@ -757,10 +755,10 @@ namespace CPU
         }
 
         // Instruction: Branch if Not Equal
-        // Function:    if(Z != 0) pc = address
+        // Function:    if(Z == 0) pc = address
         byte BNE()
         {
-            if (GetFlag(FLAGS6502.Z) != 0)
+            if (GetFlag(FLAGS6502.Z) == 0)
             {
                 Cycles++;
                 AddrAbs = (ushort)(PC + AddrRel);
@@ -943,6 +941,19 @@ namespace CPU
         }
 	    byte NOP()
         {
+            // Sadly not all NOPs are equal, Ive added a few here
+            // based on https://wiki.nesdev.com/w/index.php/CPU_unofficial_opcodes
+            // and will add more based on game compatibility, and ultimately
+            // I'd like to cover all illegal opcodes too
+            switch (Opcode) {
+            case 0x1C:
+            case 0x3C:
+            case 0x5C:
+            case 0x7C:
+            case 0xDC:
+            case 0xFC:
+                return 1;
+            }
             return 0x00;
         }
 	    byte ORA()

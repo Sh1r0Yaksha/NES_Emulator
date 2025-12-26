@@ -4,6 +4,15 @@ namespace CPU
     {
         public cpu6502()
         {
+            SetFlag(FLAGS6502.U, true);
+
+            // 1. Initialize ALL 256 opcodes to a safe "XXX" placeholder
+            // This prevents NullReferenceException for any opcode you haven't implemented yet.
+            for (int i = 0; i < 256; i++)
+            {
+                Lookup[i] = new INSTRUCTION("XXX", NOP, IMP, 2);
+            }
+
             // Row 0 (0x00 - 0x0F)
             Lookup[0x00] = new INSTRUCTION("BRK", BRK, IMM, 7);
             Lookup[0x01] = new INSTRUCTION("ORA", ORA, INX, 6);
@@ -188,6 +197,111 @@ namespace CPU
             Lookup[0xFA] = new INSTRUCTION("NOP", NOP, IMP, 2);
             Lookup[0xFD] = new INSTRUCTION("SBC", SBC, ABX, 4);
             Lookup[0xFE] = new INSTRUCTION("INC", INC, ABX, 7);
+
+            // NES Special Opcodes
+
+            // LAX (Load Accumulator and X register)
+            // Opcodes: A7, B7, AF, BF, A3, B3
+            Lookup[0xA7] = new INSTRUCTION("LAX", LAX, ZP0, 3);
+            Lookup[0xB7] = new INSTRUCTION("LAX", LAX, ZPY, 4);
+            Lookup[0xAF] = new INSTRUCTION("LAX", LAX, ABS, 4);
+            Lookup[0xBF] = new INSTRUCTION("LAX", LAX, ABY, 4); 
+            Lookup[0xA3] = new INSTRUCTION("LAX", LAX, IZX, 6);
+            Lookup[0xB3] = new INSTRUCTION("LAX", LAX, IZY, 5); 
+
+            // SAX (Store Accumulator AND X)
+            // Opcodes: 87, 97, 8F, 83
+            Lookup[0x87] = new INSTRUCTION("SAX", SAX, ZP0, 3);
+            Lookup[0x97] = new INSTRUCTION("SAX", SAX, ZPY, 4);
+            Lookup[0x8F] = new INSTRUCTION("SAX", SAX, ABS, 4);
+            Lookup[0x83] = new INSTRUCTION("SAX", SAX, IZX, 6);
+
+            // DCP = DEC + CMP
+            Lookup[0xC3] = new INSTRUCTION("DCP", DCP, IZX, 8);
+            Lookup[0xC7] = new INSTRUCTION("DCP", DCP, ZP0, 5);
+            Lookup[0xCF] = new INSTRUCTION("DCP", DCP, ABS, 6);
+            Lookup[0xD3] = new INSTRUCTION("DCP", DCP, IZY, 8);
+            Lookup[0xD7] = new INSTRUCTION("DCP", DCP, ZPX, 6);
+            Lookup[0xDB] = new INSTRUCTION("DCP", DCP, ABY, 7);
+            Lookup[0xDF] = new INSTRUCTION("DCP", DCP, ABX, 7);
+
+            // ISB = INC + SBC
+            Lookup[0xE3] = new INSTRUCTION("ISB", ISB, IZX, 8);
+            Lookup[0xE7] = new INSTRUCTION("ISB", ISB, ZP0, 5);
+            Lookup[0xEF] = new INSTRUCTION("ISB", ISB, ABS, 6);
+            Lookup[0xF3] = new INSTRUCTION("ISB", ISB, IZY, 8);
+            Lookup[0xF7] = new INSTRUCTION("ISB", ISB, ZPX, 6);
+            Lookup[0xFB] = new INSTRUCTION("ISB", ISB, ABY, 7);
+            Lookup[0xFF] = new INSTRUCTION("ISB", ISB, ABX, 7);
+
+            // SLO = ASL + ORA
+            Lookup[0x03] = new INSTRUCTION("SLO", SLO, IZX, 8);
+            Lookup[0x07] = new INSTRUCTION("SLO", SLO, ZP0, 5);
+            Lookup[0x0F] = new INSTRUCTION("SLO", SLO, ABS, 6);
+            Lookup[0x13] = new INSTRUCTION("SLO", SLO, IZY, 8);
+            Lookup[0x17] = new INSTRUCTION("SLO", SLO, ZPX, 6);
+            Lookup[0x1B] = new INSTRUCTION("SLO", SLO, ABY, 7);
+            Lookup[0x1F] = new INSTRUCTION("SLO", SLO, ABX, 7);
+
+            // RLA = ROL + AND
+            Lookup[0x23] = new INSTRUCTION("RLA", RLA, IZX, 8);
+            Lookup[0x27] = new INSTRUCTION("RLA", RLA, ZP0, 5);
+            Lookup[0x2F] = new INSTRUCTION("RLA", RLA, ABS, 6);
+            Lookup[0x33] = new INSTRUCTION("RLA", RLA, IZY, 8);
+            Lookup[0x37] = new INSTRUCTION("RLA", RLA, ZPX, 6);
+            Lookup[0x3B] = new INSTRUCTION("RLA", RLA, ABY, 7);
+            Lookup[0x3F] = new INSTRUCTION("RLA", RLA, ABX, 7);
+
+            // SRE = LSR + EOR
+            Lookup[0x43] = new INSTRUCTION("SRE", SRE, IZX, 8);
+            Lookup[0x47] = new INSTRUCTION("SRE", SRE, ZP0, 5);
+            Lookup[0x4F] = new INSTRUCTION("SRE", SRE, ABS, 6);
+            Lookup[0x53] = new INSTRUCTION("SRE", SRE, IZY, 8);
+            Lookup[0x57] = new INSTRUCTION("SRE", SRE, ZPX, 6);
+            Lookup[0x5B] = new INSTRUCTION("SRE", SRE, ABY, 7);
+            Lookup[0x5F] = new INSTRUCTION("SRE", SRE, ABX, 7);
+
+            // RRA = ROR + ADC
+            Lookup[0x63] = new INSTRUCTION("RRA", RRA, IZX, 8);
+            Lookup[0x67] = new INSTRUCTION("RRA", RRA, ZP0, 5);
+            Lookup[0x6F] = new INSTRUCTION("RRA", RRA, ABS, 6);
+            Lookup[0x73] = new INSTRUCTION("RRA", RRA, IZY, 8);
+            Lookup[0x77] = new INSTRUCTION("RRA", RRA, ZPX, 6);
+            Lookup[0x7B] = new INSTRUCTION("RRA", RRA, ABY, 7);
+            Lookup[0x7F] = new INSTRUCTION("RRA", RRA, ABX, 7);
+
+            // --- ILLEGAL 2-BYTE NOPS ---c
+            // These consume 1 operand byte (Total 2 bytes). 
+            // We use 'IMP' (Implied) for standard NOP, but 'IMM' (Immediate) here to skip the byte.
+            // Cycles: Varies, usually 2, 3, or 4.
+            Lookup[0x04] = new INSTRUCTION("NOP", NOP, ZP0, 3);
+            Lookup[0x14] = new INSTRUCTION("NOP", NOP, ZPX, 4);
+            Lookup[0x34] = new INSTRUCTION("NOP", NOP, ZPX, 4);
+            Lookup[0x44] = new INSTRUCTION("NOP", NOP, ZP0, 3);
+            Lookup[0x54] = new INSTRUCTION("NOP", NOP, ZPX, 4);
+            Lookup[0x64] = new INSTRUCTION("NOP", NOP, ZP0, 3);
+            Lookup[0x74] = new INSTRUCTION("NOP", NOP, ZPX, 4);
+            Lookup[0x80] = new INSTRUCTION("NOP", NOP, IMM, 2);
+            Lookup[0x82] = new INSTRUCTION("NOP", NOP, IMM, 2);
+            Lookup[0x89] = new INSTRUCTION("NOP", NOP, IMM, 2);
+            Lookup[0xC2] = new INSTRUCTION("NOP", NOP, IMM, 2);
+            Lookup[0xD4] = new INSTRUCTION("NOP", NOP, ZPX, 4);
+            Lookup[0xE2] = new INSTRUCTION("NOP", NOP, IMM, 2);
+            Lookup[0xF4] = new INSTRUCTION("NOP", NOP, ZPX, 4);
+
+            // --- ILLEGAL 3-BYTE NOPS ---
+            // These consume 2 operand bytes (Total 3 bytes).
+            // We use 'ABS' or 'ABX' to skip the bytes correctly.
+            Lookup[0x0C] = new INSTRUCTION("NOP", NOP, ABS, 4);
+
+            // These use 'ABX' (Absolute, X) which might cross a page boundary!
+            // That is why your NOP function checks them.
+            Lookup[0x1C] = new INSTRUCTION("NOP", NOP, ABX, 4); 
+            Lookup[0x3C] = new INSTRUCTION("NOP", NOP, ABX, 4); 
+            Lookup[0x5C] = new INSTRUCTION("NOP", NOP, ABX, 4); 
+            Lookup[0x7C] = new INSTRUCTION("NOP", NOP, ABX, 4); 
+            Lookup[0xDC] = new INSTRUCTION("NOP", NOP, ABX, 4); 
+            Lookup[0xFC] = new INSTRUCTION("NOP", NOP, ABX, 4);
         }
 
 
@@ -401,8 +515,7 @@ namespace CPU
         public uint ClockCount = 0;	   // A global accumulation of the number of clocks
 
         private ushort STKP_Start = 0x0100;
-        private ushort STKP_End = 0x01FF;
-
+        
         // Linkage to the communications bus
         public byte Read(ushort address)
         {
@@ -794,18 +907,23 @@ namespace CPU
         {
             PC++;
             
-            SetFlag(FLAGS6502.I, true);
+            // Push PC to Stack
             Write((ushort)(STKP_Start + STKP), (byte)((PC >> 8) & 0x00FF));
             STKP--;
             Write((ushort)(STKP_Start + STKP), (byte)(PC & 0x00FF));
             STKP--;
 
-            SetFlag(FLAGS6502.B, true);
-            Write((ushort)(STKP_Start + STKP), STATUS);
+            // Push Status
+            byte statusToPush = (byte)(STATUS | (byte)FLAGS6502.B | (byte)FLAGS6502.U);
+            Write((ushort)(STKP_Start + STKP), statusToPush);
             STKP--;
-            SetFlag(FLAGS6502.B, false);
+            
+            // Disable Interrupts
+            SetFlag(FLAGS6502.I, true);
 
+            // Jump to Interrupt Vector
             PC = (ushort)(Read(0xFFFE) | (Read(0xFFFF) << 8));
+
             return 0x00;
         }
 
@@ -913,42 +1031,106 @@ namespace CPU
             return 0x00;
         }
 
+        // Instruction: Decrement Value at Memory Location
+        // Function:    M = M - 1
+        // Flags Out:   N, Z
         byte DEC()
         {
+            Fetch();
+            Temp = (ushort)(Fetched - 1);
+            Write(AddrAbs, (byte)(Temp & 0x00FF));
+            SetFlag(FLAGS6502.Z, (Temp & 0x00FF) == 0x0000);
+            SetFlag(FLAGS6502.N, (Temp & 0x0080) != 0);
             return 0x00;
         }
+
+        // Instruction: Decrement X Register
+        // Function:    X = X - 1
+        // Flags Out:   N, Z
 	    byte DEX()
         {
+            X--;
+            SetFlag(FLAGS6502.Z, X == 0x00);
+            SetFlag(FLAGS6502.N, (X & 0x80) != 0);
             return 0x00;
         }
+
+
 	    byte DEY()
         {
+            Y--;
+            SetFlag(FLAGS6502.Z, Y == 0x00);
+            SetFlag(FLAGS6502.N, (Y & 0x80) != 0);
             return 0x00;
         }
+
+        // Instruction: Bitwise Logic XOR
+        // Function:    A = A xor M
+        // Flags Out:   N, Z
 	    byte EOR()
         {
-            return 0x00;
+            Fetch();
+            A = (byte)(A ^ Fetched);	
+            SetFlag(FLAGS6502.Z, A == 0x00);
+            SetFlag(FLAGS6502.N, (A & 0x80) != 0);
+            return 0x01;
         }
 
+        // Instruction: Increment Value at Memory Location
+        // Function:    M = M + 1
+        // Flags Out:   N, Z
         byte INC()
         {
-            return 0x00;
-        }
-	    byte INX()
-        {
-            return 0x00;
-        }
-	    byte INY()
-        {
-            return 0x00;
-        }
-	    byte JMP()
-        {
+            Fetch();
+            Temp = (ushort)(Fetched + 1);
+            Write(AddrAbs, (byte)(Temp & 0x00FF));
+            SetFlag(FLAGS6502.Z, (Temp & 0x00FF) == 0x0000);
+            SetFlag(FLAGS6502.N, (Temp & 0x0080) != 0);
             return 0x00;
         }
 
+        // Instruction: Increment X Register
+        // Function:    X = X + 1
+        // Flags Out:   N, Z
+	    byte INX()
+        {
+            X++;
+            SetFlag(FLAGS6502.Z, X == 0x00);
+            SetFlag(FLAGS6502.N, (X & 0x80) != 0);    
+            return 0x00;
+        }
+
+        // Instruction: Increment Y Register
+        // Function:    Y = Y + 1
+        // Flags Out:   N, Z
+	    byte INY()
+        {
+            Y++;
+            SetFlag(FLAGS6502.Z, Y == 0x00);
+            SetFlag(FLAGS6502.N, (Y & 0x80) != 0);    
+            return 0x00;
+        }
+
+        // Instruction: Jump To Location
+        // Function:    pc = address
+	    byte JMP()
+        {
+            PC = AddrAbs;
+            return 0x00;
+        }
+
+        // Instruction: Jump To Sub-Routine
+        // Function:    Push current pc to stack, pc = address  
         byte JSR()
         {
+            PC--;
+
+            Write((ushort)(STKP_Start + STKP), (byte)((PC >> 8) & 0x00FF));
+            STKP--;
+            Write((ushort)(STKP_Start + STKP), (byte)(PC & 0x00FF));
+            STKP--;
+
+            PC = AddrAbs;
             return 0x00;
         }
 
@@ -964,74 +1146,188 @@ namespace CPU
             return 0x01;
         }
 
+        // Instruction: Load The X Register
+        // Function:    X = M
+        // Flags Out:   N, Z
 	    byte LDX()
         {
-            return 0x00;
+            Fetch();
+            X = Fetched;
+            SetFlag(FLAGS6502.Z, X == 0x00);
+            SetFlag(FLAGS6502.N, (X & 0x80) != 0);
+            return 0x01;
         }
+
+        // Instruction: Load The Y Register
+        // Function:    Y = M
+        // Flags Out:   N, Z
 	    byte LDY()
         {
-            return 0x00;
+            Fetch();
+            Y = Fetched;
+            SetFlag(FLAGS6502.Z, Y == 0x00);
+            SetFlag(FLAGS6502.N, (Y & 0x80) != 0);
+            return 0x01;
         }
 
         byte LSR()
         {
-            return 0x00;
-        }
-	    byte NOP()
-        {
-            // Sadly not all NOPs are equal, Ive added a few here
-            // based on https://wiki.nesdev.com/w/index.php/CPU_unofficial_opcodes
-            // and will add more based on game compatibility, and ultimately
-            // I'd like to cover all illegal opcodes too
-            switch (Opcode) {
-            case 0x1C:
-            case 0x3C:
-            case 0x5C:
-            case 0x7C:
-            case 0xDC:
-            case 0xFC:
-                return 1;
-            }
-            return 0x00;
-        }
-	    byte ORA()
-        {
-            return 0x00;
-        }
-	    byte PHA()
-        {
+            Fetch();
+            SetFlag(FLAGS6502.C, (Fetched & 0x0001) != 0);
+            Temp = (ushort)(Fetched >> 1);	
+            SetFlag(FLAGS6502.Z, (Temp & 0x00FF) == 0x0000);
+            SetFlag(FLAGS6502.N, (Temp & 0x0080) != 0);
+            if (Lookup[Opcode].AddressMode == IMP)
+                A = (byte)(Temp & 0x00FF);
+            else
+                Write(AddrAbs, (byte)(Temp & 0x00FF));
             return 0x00;
         }
 
+
+	    // byte NOP()
+        // {
+        //     // Sadly not all NOPs are equal, Ive added a few here
+        //     // based on https://wiki.nesdev.com/w/index.php/CPU_unofficial_opcodes
+        //     // and will add more based on game compatibility, and ultimately
+        //     // I'd like to cover all illegal opcodes too
+        //     switch (Opcode) {
+        //     case 0x1C:
+        //     case 0x3C:
+        //     case 0x5C:
+        //     case 0x7C:
+        //     case 0xDC:
+        //     case 0xFC:
+        //         return 1;
+        //     }
+        //     return 0x00;
+        // }
+
+        byte NOP()
+        {
+            // 2-cycle undocumented NOPs (read immediate but don't use it)
+            if (Opcode == 0x80 || Opcode == 0x82 || Opcode == 0x89 || 
+                Opcode == 0xC2 || Opcode == 0xE2)
+            {
+                PC++;  // Skip the immediate byte manually
+                return 0x00;
+            }
+            
+            // Your existing multi-cycle NOPs
+            switch (Opcode) {
+                case 0x1C: case 0x3C: case 0x5C: case 0x7C:
+                case 0xDC: case 0xFC:
+                    return 1;
+            }
+            return 0x00;
+        }
+
+        // Instruction: Bitwise Logic OR
+        // Function:    A = A | M
+        // Flags Out:   N, Z
+	    byte ORA()
+        {
+            Fetch();
+            A = (byte)(A | Fetched);
+            SetFlag(FLAGS6502.Z, A == 0x00);
+            SetFlag(FLAGS6502.N, (A & 0x80) != 0);
+            return 0x01;
+        }
+
+        // Instruction: Push Accumulator to Stack
+        // Function:    A -> stack
+	    byte PHA()
+        {
+            Write((ushort)(STKP_Start + STKP), A);
+            STKP--;
+            return 0x00;
+        }
+
+        // Instruction: Push Status Register to Stack
+        // Function:    status -> stack
+        // Note:        Break flag is set to 1 before push
         byte PHP()
         {
+            Write((ushort)(STKP_Start + STKP), (byte)(STATUS | (byte)FLAGS6502.B | (byte)FLAGS6502.U));
+            STKP--;
             return 0x00;
         }
+
+        // Instruction: Pop Accumulator off Stack
+        // Function:    A <- stack
+        // Flags Out:   N, Z
 	    byte PLA()
         {
+            STKP++;
+            A = Read((ushort)(STKP_Start + STKP));
+            SetFlag(FLAGS6502.Z, A == 0x00);
+            SetFlag(FLAGS6502.N, (A & 0x80) != 0);
             return 0x00;
         }
+
+        // Instruction: Pop Status Register off Stack
+        // Function:    Status <- stack
 	    byte PLP()
         {
+            STKP++;
+            STATUS = Read((ushort)(STKP_Start + STKP));
+            SetFlag(FLAGS6502.B, false);
+            SetFlag(FLAGS6502.U, true);
             return 0x00;
         }
+
 	    byte ROL()
         {
+            Fetch();
+            Temp = (ushort)((Fetched << 1) | GetFlag(FLAGS6502.C));
+            SetFlag(FLAGS6502.C, (Temp & 0xFF00) != 0);
+            SetFlag(FLAGS6502.Z, (Temp & 0x00FF) == 0x0000);
+            SetFlag(FLAGS6502.N, (Temp & 0x0080) != 0);
+            if (Lookup[Opcode].AddressMode == IMP)
+                A = (byte)(Temp & 0x00FF);
+            else
+                Write(AddrAbs, (byte)(Temp & 0x00FF));
             return 0x00;
         }
 
         byte ROR()
         {
+            Fetch();
+            Temp = (ushort)((GetFlag(FLAGS6502.C) << 7) | (Fetched >> 1));
+            SetFlag(FLAGS6502.C, (Fetched & 0x01) != 0);
+            SetFlag(FLAGS6502.Z, (Temp & 0x00FF) == 0x00);
+            SetFlag(FLAGS6502.N, (Temp & 0x0080) != 0);
+            if (Lookup[Opcode].AddressMode == IMP)
+                A = (byte)(Temp & 0x00FF);
+            else
+                Write(AddrAbs, (byte)(Temp & 0x00FF));
             return 0x00;
         }
+
 	    byte RTI()
         {
+            STKP++;
+            STATUS = Read((ushort)(STKP_Start + STKP));
+            STATUS &= (byte)~FLAGS6502.B;
+            STATUS &= (byte)~FLAGS6502.U;
+
+            STKP++;
+            PC = Read((ushort)(STKP_Start + STKP));
+            STKP++;
+            PC |= (ushort)(Read((ushort)(STKP_Start + STKP)) << 8);
             return 0x00;
         }
 	    byte RTS()
         {
+            STKP++;
+            PC = Read((ushort)(STKP_Start + STKP));
+            STKP++;
+            PC |= (ushort)(Read((ushort)(STKP_Start + STKP)) << 8);
+            
+            PC++;
             return 0x00;
         }
+
 	    byte SBC()
         {
             Fetch();
@@ -1060,52 +1356,256 @@ namespace CPU
             SetFlag(FLAGS6502.C, true);
             return 0x00;
         }
+
+        // Instruction: Set Decimal Flag
+        // Function:    D = 1   
 	    byte SED()
         {
+            SetFlag(FLAGS6502.D, true);
             return 0x00;
         }
+
+        // Instruction: Set Interrupt Flag / Enable Interrupts
+        // Function:    I = 1
 	    byte SEI()
         {
+            SetFlag(FLAGS6502.I, true);
             return 0x00;
         }
+
+        // Instruction: Store Accumulator at Address
+        // Function:    M = A
 	    byte STA()
         {
+            Write(AddrAbs, A);
             return 0x00;
         }
 
+        // Instruction: Store X Register at Address
+        // Function:    M = X
         byte STX()
         {
-            return 0x00;
-        }
-	    byte STY()
-        {
-            return 0x00;
-        }
-	    byte TAX()
-        {
-            return 0x00;
-        }
-	    byte TAY()
-        {
+            Write(AddrAbs, X);
             return 0x00;
         }
 
+        // Instruction: Store Y Register at Address
+        // Function:    M = Y
+	    byte STY()
+        {
+             Write(AddrAbs, Y);
+            return 0x00;
+        }
+
+        // Instruction: Transfer Accumulator to X Register
+        // Function:    X = A
+        // Flags Out:   N, Z
+	    byte TAX()
+        {
+            X = A;
+            SetFlag(FLAGS6502.Z, X == 0x00);
+            SetFlag(FLAGS6502.N, (X & 0x80) != 0);
+            return 0x00;
+        }
+
+        // Instruction: Transfer Accumulator to Y Register
+        // Function:    Y = A
+        // Flags Out:   N, Z
+	    byte TAY()
+        {
+            Y = A;
+            SetFlag(FLAGS6502.Z, Y == 0x00);
+            SetFlag(FLAGS6502.N, (Y & 0x80) != 0);
+            return 0x00;
+        }
+
+        // Instruction: Transfer Stack Pointer to X Register
+        // Function:    X = stack pointer
+        // Flags Out:   N, Z
         byte TSX()
         {
+            X = STKP;
+            SetFlag(FLAGS6502.Z, X == 0x00);
+            SetFlag(FLAGS6502.N, (X & 0x80) != 0);
             return 0x00;
         }
+
+        // Instruction: Transfer X Register to Accumulator
+        // Function:    A = X
+        // Flags Out:   N, Z
 	    byte TXA()
         {
+            A = X;
+            SetFlag(FLAGS6502.Z, A == 0x00);
+            SetFlag(FLAGS6502.N, (A & 0x80) != 0);
             return 0x00;
         }
+
+        // Instruction: Transfer X Register to Stack Pointer
+        // Function:    stack pointer = X
 	    byte TXS()
         {
+            STKP = X;
             return 0x00;
         }
+
+        // Instruction: Transfer Y Register to Accumulator
+        // Function:    A = Y
+        // Flags Out:   N, Z
 	    byte TYA()
         {
+            A = Y;
+            SetFlag(FLAGS6502.Z, A == 0x00);
+            SetFlag(FLAGS6502.N, (A & 0x80) != 0);
             return 0x00;
         }	
+
+        // ------- Special NES Illegal Opcodes --------------
+
+        // Performs LDA and LDX simultaneously
+        byte LAX()
+        {
+            // Execute the fetch (Address Mode logic handles the operand)
+            Fetch();
+            
+            // Load data into A and X
+            A = Fetched;
+            X = Fetched;
+            
+            // Set Flags based on the value loaded
+            SetFlag(FLAGS6502.Z, A == 0x00);
+            SetFlag(FLAGS6502.N, (A & 0x80) != 0);
+            
+            return 0x01; // LAX often allows page boundary cycles
+        }
+
+        // Stores the result of A & X into memory
+        byte SAX()
+        {
+            // No Fetch() needed for Store instructions usually, 
+            // but we need to calculate the value to write.
+            byte data = (byte)(A & X);
+            Write(AddrAbs, data);
+            return 0;
+        }
+
+        byte DCP()
+        {
+            Fetch();
+            
+            // 1. DEC Logic
+            byte temp = (byte)(Fetched - 1);
+            Write(AddrAbs, temp);
+
+            // 2. CMP Logic (Compare A against the new memory value)
+            SetFlag(FLAGS6502.C, A >= temp);
+            SetFlag(FLAGS6502.Z, (A - temp) == 0x00);
+            SetFlag(FLAGS6502.N, ((A - temp) & 0x80) != 0);
+
+            return 0;
+        }
+
+        byte ISB()
+        {
+            Fetch();
+            
+            // 1. INC Logic
+            byte temp = (byte)(Fetched + 1);
+            Write(AddrAbs, temp);
+            
+            // 2. SBC Logic (Subtract new memory from A)
+            ushort value = (ushort)(temp ^ 0x00FF); // Invert bits for subtraction
+            
+            ushort tempSum = (ushort)(A + value + GetFlag(FLAGS6502.C));
+            
+            SetFlag(FLAGS6502.C, (tempSum & 0xFF00) != 0);
+            SetFlag(FLAGS6502.Z, (tempSum & 0x00FF) == 0);
+            SetFlag(FLAGS6502.V, ((tempSum ^ A) & (tempSum ^ value) & 0x0080) != 0);
+            SetFlag(FLAGS6502.N, (tempSum & 0x0080) != 0);
+            
+            A = (byte)(tempSum & 0x00FF);
+
+            return 0;
+        }
+
+        byte SLO()
+        {
+            Fetch();
+            
+            // 1. ASL Logic
+            SetFlag(FLAGS6502.C, (Fetched & 0x80) != 0);
+            byte temp = (byte)(Fetched << 1);
+            Write(AddrAbs, temp);
+            
+            // 2. ORA Logic
+            A |= temp;
+            SetFlag(FLAGS6502.Z, A == 0x00);
+            SetFlag(FLAGS6502.N, (A & 0x80) != 0);
+
+            return 0;
+        }
+
+        byte RLA()
+        {
+            Fetch();
+            
+            // 1. ROL Logic
+            byte oldCarry = GetFlag(FLAGS6502.C);
+            SetFlag(FLAGS6502.C, (Fetched & 0x80) != 0);
+            
+            byte temp = (byte)((Fetched << 1) | oldCarry);
+            Write(AddrAbs, temp);
+            
+            // 2. AND Logic
+            A &= temp;
+            SetFlag(FLAGS6502.Z, A == 0x00);
+            SetFlag(FLAGS6502.N, (A & 0x80) != 0);
+
+            return 0;
+        }
+
+        byte SRE()
+        {
+            Fetch();
+            
+            // 1. LSR Logic
+            SetFlag(FLAGS6502.C, (Fetched & 0x01) != 0);
+            byte temp = (byte)(Fetched >> 1);
+            Write(AddrAbs, temp);
+            
+            // 2. EOR Logic
+            A ^= temp;
+            SetFlag(FLAGS6502.Z, A == 0x00);
+            SetFlag(FLAGS6502.N, (A & 0x80) != 0);
+
+            return 0;
+        }
+
+        byte RRA()
+        {
+            Fetch();
+            
+            // 1. ROR Logic
+            byte oldCarry = GetFlag(FLAGS6502.C);
+            SetFlag(FLAGS6502.C, (Fetched & 0x01) != 0);
+            
+            byte temp = (byte)((Fetched >> 1) | (oldCarry << 7));
+            Write(AddrAbs, temp);
+            
+            // 2. ADC Logic (Add temp to A)
+            ushort value = temp;
+            ushort tempSum = (ushort)(A + value + GetFlag(FLAGS6502.C));
+            
+            SetFlag(FLAGS6502.C, (tempSum & 0xFF00) != 0);
+            SetFlag(FLAGS6502.Z, (tempSum & 0x00FF) == 0);
+            SetFlag(FLAGS6502.V, ((~A ^ value) & (A ^ tempSum) & 0x0080) != 0);
+            SetFlag(FLAGS6502.N, (tempSum & 0x0080) != 0);
+            
+            A = (byte)(tempSum & 0x00FF);
+
+            return 0;
+        }
+
 #endregion
     }
 }

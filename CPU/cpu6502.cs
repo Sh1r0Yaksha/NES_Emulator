@@ -1185,20 +1185,39 @@ namespace CPU
         }
 
 
-	    byte NOP()
+	    // byte NOP()
+        // {
+        //     // Sadly not all NOPs are equal, Ive added a few here
+        //     // based on https://wiki.nesdev.com/w/index.php/CPU_unofficial_opcodes
+        //     // and will add more based on game compatibility, and ultimately
+        //     // I'd like to cover all illegal opcodes too
+        //     switch (Opcode) {
+        //     case 0x1C:
+        //     case 0x3C:
+        //     case 0x5C:
+        //     case 0x7C:
+        //     case 0xDC:
+        //     case 0xFC:
+        //         return 1;
+        //     }
+        //     return 0x00;
+        // }
+
+        byte NOP()
         {
-            // Sadly not all NOPs are equal, Ive added a few here
-            // based on https://wiki.nesdev.com/w/index.php/CPU_unofficial_opcodes
-            // and will add more based on game compatibility, and ultimately
-            // I'd like to cover all illegal opcodes too
+            // 2-cycle undocumented NOPs (read immediate but don't use it)
+            if (Opcode == 0x80 || Opcode == 0x82 || Opcode == 0x89 || 
+                Opcode == 0xC2 || Opcode == 0xE2)
+            {
+                PC++;  // Skip the immediate byte manually
+                return 0x00;
+            }
+            
+            // Your existing multi-cycle NOPs
             switch (Opcode) {
-            case 0x1C:
-            case 0x3C:
-            case 0x5C:
-            case 0x7C:
-            case 0xDC:
-            case 0xFC:
-                return 1;
+                case 0x1C: case 0x3C: case 0x5C: case 0x7C:
+                case 0xDC: case 0xFC:
+                    return 1;
             }
             return 0x00;
         }

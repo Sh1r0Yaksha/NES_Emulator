@@ -62,7 +62,7 @@ namespace tests
                     // Mark Instruction as Tested
                     byte opcode = Bus.Read(cpu.PC, true);
 
-                    if (cpu.Lookup[opcode].Name == "XXX")
+                    if (cpu.Lookup[opcode].Name == "NOP")
                         continue;
                     string instName = string.Empty;
                     
@@ -103,7 +103,7 @@ namespace tests
             }
             finally
             {
-                Console.WriteLine($"\n--- Finished the test, all {lineNum} lines except those with illegal opcodes ran perfectly---");    
+                Console.WriteLine($"\n--- Finished the test, all {lineNum} lines ran perfectly---");    
             }
 
             cpu.Reset();

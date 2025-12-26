@@ -4,6 +4,7 @@ namespace CPU
     {
         public cpu6502()
         {
+            SetFlag(FLAGS6502.U, true);
             // Row 0 (0x00 - 0x0F)
             Lookup[0x00] = new INSTRUCTION("BRK", BRK, IMM, 7);
             Lookup[0x01] = new INSTRUCTION("ORA", ORA, INX, 6);

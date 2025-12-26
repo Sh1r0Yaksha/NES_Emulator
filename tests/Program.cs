@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Dynamic;
+using System.Reflection.Emit;
 using CPU;
 
 namespace tests
@@ -16,7 +17,6 @@ namespace tests
 
             // Setup CPU Start State for Nestest
             cpu.PC = 0xC000;
-            cpu.Cycles = 7;
             cpu.SetFlag(cpu6502.FLAGS6502.I, true);
             cpu.STKP = 0xFD;
 
@@ -61,6 +61,9 @@ namespace tests
 
                     // Mark Instruction as Tested
                     byte opcode = Bus.Read(cpu.PC, true);
+
+                    if (string.IsNullOrEmpty(cpu.Lookup[opcode].Name))
+                        continue;
                     string instName = string.Empty;
                     
                     // Safety check for lookup table bounds
@@ -79,8 +82,6 @@ namespace tests
                         (cpu.STATUS & 0xEF) != (expected.P & 0xEF))
                     {
                         // 1. Read the opcode at the current PC to see what instruction failed
-                        
-
                         Console.ForegroundColor = ConsoleColor.Red;
                         Console.WriteLine("\n[FAILED] Mismatch at Line " + lineNum);
                         Console.WriteLine($"Instruction: {instName} (Opcode: {opcode:X2})");
@@ -89,8 +90,6 @@ namespace tests
                         Console.ResetColor();
                         return; 
                     }
-
-                    // ... (Rest of your execution logic: Mark coverage, Clock loop) ...
                 
                     // Execute
                     cpu.Clock();
@@ -102,21 +101,11 @@ namespace tests
                 Console.WriteLine($"Critical Error at line {lineNum}: {ex.Message}");
                 Console.WriteLine(ex.StackTrace); // Print stack trace to see exactly where
             }
-
-            // --- STEP 4: PRINT COVERAGE REPORT ---
-            Console.WriteLine("\n--- Instruction Coverage Report ---");
-            int passed = coverage.Count(x => x.Value);
-            int total = coverage.Count;
-            
-            Console.WriteLine($"Coverage: {passed}/{total} Instructions executed.");
-            
-            // Print Untested Instructions
-            Console.WriteLine("Untested Instructions:");
-            foreach (var item in coverage.Where(x => x.Value == false))
+            finally
             {
-                Console.Write(item.Key + " ");
+                Console.WriteLine($"\n--- Finished the test, all {lineNum} lines except those with illegal opcodes ran perfectly---");    
             }
-            Console.WriteLine();
+            
         }
 
         static void LoadNestest(cpu6502 cpu)

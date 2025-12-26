@@ -62,7 +62,7 @@ namespace tests
                     // Mark Instruction as Tested
                     byte opcode = Bus.Read(cpu.PC, true);
 
-                    if (string.IsNullOrEmpty(cpu.Lookup[opcode].Name))
+                    if (cpu.Lookup[opcode].Name == "XXX")
                         continue;
                     string instName = string.Empty;
                     
@@ -105,7 +105,76 @@ namespace tests
             {
                 Console.WriteLine($"\n--- Finished the test, all {lineNum} lines except those with illegal opcodes ran perfectly---");    
             }
+
+            cpu.Reset();
             
+            // ------ Run Klaus Dormann Functional Test ------------
+            RunFunctionalTest(cpu);
+        }
+
+        public static void RunFunctionalTest(cpu6502 cpu)
+        {
+            Console.WriteLine("---------------------------------------");
+            Console.WriteLine("Running Klaus Dormann Functional Test...");
+            Console.WriteLine("---------------------------------------");
+
+            // 1. Load the binary
+            // Ensure you have "6502_functional_test.bin" in your folder
+            byte[] bin = System.IO.File.ReadAllBytes("6502_functional_test.bin");
+            
+            // Load into RAM at 0x0000 (The test assumes 64KB RAM)
+            for (int i = 0; i < bin.Length; i++)
+                Bus.RAM[i] = bin[i];
+
+            // 2. Setup CPU
+            cpu.PC = 0x0400; // Entry point for this specific test
+            cpu.STKP = 0xFF;   // Reset Stack Pointer
+            cpu.Cycles = 0;
+            
+            // Disable Decimal mode if you implemented it (NES doesn't use it)
+            // cpu.SetFlag(FLAGS6502.D, false);
+
+            // 3. Run until Trap or Success
+            long cycles = 0;
+            ushort prevPC = 0;
+            
+            // The test takes about 26 million cycles to complete!
+            // We detect "stuck" states by checking if PC stays same for too long
+            
+            while (true)
+            {
+                cpu.Clock();
+
+                if (cpu.Complete())
+                {
+                    // Check for Infinite Loop (The test traps itself on failure or success)
+                    if (cpu.PC == prevPC)
+                    {
+                        // SUCCESS ADDRESS: 0x3469
+                        if (cpu.PC == 0x3469)
+                        {
+                            Console.ForegroundColor = ConsoleColor.Green;
+                            Console.WriteLine("\n[SUCCESS] Reached PC: 0x3469!");
+                            Console.WriteLine("Your CPU is 100% Compliant.");
+                            Console.ResetColor();
+                            break;
+                        }
+                        else
+                        {
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            Console.WriteLine($"\n[FAIL] Trap detected at PC: {cpu.PC:X4}");
+                            Console.WriteLine("This usually indicates a logic error in the previous instruction.");
+                            Console.ResetColor();
+                            break;
+                        }
+                    }
+                    prevPC = cpu.PC;
+                    cycles++;
+                    
+                    // Optional: Print progress every 1M cycles so you know it's alive
+                    if (cycles % 1000000 == 0) Console.Write(".");
+                }
+            }
         }
 
         static void LoadNestest(cpu6502 cpu)
@@ -134,32 +203,6 @@ namespace tests
             // Set Reset Vector (FFFC/FFFD) to C000 just in case your CPU resets
             cpu.Write(0xFFFC, 0x00);
             cpu.Write(0xFFFD, 0xC0);
-        }
-
-        static string LogState(cpu6502 cpu)
-        {
-            // The golden log format has a lot of extra info (Disassembly, PPU, Cycles).
-            // We only have the CPU right now, so we match the REGISTERS column.
-            
-            // NESTEST LOG LINE EXAMPLE:
-            // C000  4C F5 C5  JMP $C5F5                       A:00 X:00 Y:00 P:24 SP:FD PPU:  0, 21 CYC:7
-            
-            // OUR LOG LINE:
-            // C000  A:00 X:00 Y:00 P:24 SP:FD
-
-            // NOTE ON STATUS REGISTER (P):
-            // The 'Unused' bit (bit 5) is physically always read as 1 on the NES.
-            // We force it to 1 here for the log to match Nintendulator.
-            byte p = (byte)(cpu.STATUS | 0x20);
-
-            return string.Format("{0:X4}  A:{1:X2} X:{2:X2} Y:{3:X2} P:{4:X2} SP:{5:X2}",
-                cpu.PC,
-                cpu.A,
-                cpu.X,
-                cpu.Y,
-                p, 
-                cpu.STKP
-            );
         }
     }
 }

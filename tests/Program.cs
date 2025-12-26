@@ -8,52 +8,115 @@ namespace tests
     {
         static void Main(string[] args)
         {
-            // 1. Setup CPU and Bus
-            
+            // --- SETUP ---
             cpu6502 cpu = new cpu6502();
 
-            // 2. Load ROM
+            // Load Nestest ROM (Ensure 64KB RAM as discussed before)
             LoadNestest(cpu);
 
-            // 3. Initialize State for Automated Test
+            // Setup CPU Start State for Nestest
             cpu.PC = 0xC000;
-            cpu.Cycles = 7; 
-            cpu.SetFlag(cpu6502.FLAGS6502.I, true); // Disable Interrupts
-            cpu.STKP = 0xFD;                  // Stack Pointer defaults to FD
+            cpu.Cycles = 7;
+            cpu.SetFlag(cpu6502.FLAGS6502.I, true);
+            cpu.STKP = 0xFD;
 
-            Console.WriteLine("Running nestest...");
-            
-            // 4. Open File Stream
-            using (StreamWriter sw = new StreamWriter("output.log"))
+            // --- STEP 1: CREATE COVERAGE DICTIONARY ---
+            // Key = Instruction Name (e.g., "LDA"), Value = Has it passed?
+            Dictionary<string, bool> coverage = new Dictionary<string, bool>();
+
+            // Iterate through your CPU's Lookup table to populate keys
+            // Assuming cpu.Lookup is accessible or you have a static list
+            foreach (var instruction in cpu.Lookup) 
             {
-                // Run for enough instructions to cover the basic tests (approx 8991 lines in standard log)
-                // You can increase this limit later.
-                int maxInstructions = 10000; 
-
-                for (int i = 0; i < maxInstructions; i++)
+                if (!string.IsNullOrEmpty(instruction.Name) && !coverage.ContainsKey(instruction.Name))
                 {
-                    // A. Log State BEFORE execution
-                    string logLine = LogState(cpu);
-                    sw.WriteLine(logLine);
-
-                    // B. Run One Instruction
-                    cpu.Clock();
-                    while (!cpu.Complete())
-                    {
-                        cpu.Clock();
-                    }
-                    
-                    // Stop if PC loops to itself (common trap) or hits 0 (crash)
-                    // Note: 0xC66E is a common "Test Finished" loop in nestest
-                    if (cpu.PC == 0xC66E) 
-                    {
-                        Console.WriteLine("Test Finished (Reached loop at C66E).");
-                        break; 
-                    }
+                    coverage.Add(instruction.Name, false);
                 }
             }
+
+            // --- STEP 2: LOAD LOG LINES ---
+            string[] logLines = File.ReadAllLines("nestest.log");
+            Console.WriteLine($"Loaded {logLines.Length} lines of golden log.");
+
+            // --- STEP 3: RUN AND COMPARE ---
+            int lineNum = 0;
+            try
+            {
+                foreach (string rawLine in logLines)
+                {
+                    lineNum++;
+
+                    // 1. Skip empty strings immediately
+                    if (string.IsNullOrWhiteSpace(rawLine)) continue;
+
+                    // 2. Parse the line
+                    LogEntry expected = LogEntry.FromLine(rawLine);
+
+                    // 3. CRITICAL CHECK: Did parsing fail? (BOM, Header, or bad format)
+                    if (expected == null)
+                    {
+                        // Just skip this line and move to the next one
+                        continue; 
+                    }
+
+                    // Mark Instruction as Tested
+                    byte opcode = Bus.Read(cpu.PC, true);
+                    string instName = string.Empty;
+                    
+                    // Safety check for lookup table bounds
+                    if (cpu.Lookup[opcode].Name != null)
+                    {
+                        instName = cpu.Lookup[opcode].Name;
+                        if (coverage.ContainsKey(instName)) coverage[instName] = true;
+                    }
+
+                    // 4. NOW it is safe to compare
+                    if (cpu.PC != expected.PC ||
+                        cpu.A != expected.A ||
+                        cpu.X != expected.X ||
+                        cpu.Y != expected.Y ||
+                        cpu.STKP != expected.STKP || 
+                        (cpu.STATUS & 0xEF) != (expected.P & 0xEF))
+                    {
+                        // 1. Read the opcode at the current PC to see what instruction failed
+                        
+
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine("\n[FAILED] Mismatch at Line " + lineNum);
+                        Console.WriteLine($"Instruction: {instName} (Opcode: {opcode:X2})");
+                        Console.WriteLine($"Expected: PC:{expected.PC:X4} A:{expected.A:X2} X:{expected.X:X2} Y:{expected.Y:X2} P:{expected.P:X2} SP:{expected.STKP:X2}");
+                        Console.WriteLine($"Actual:   PC:{cpu.PC:X4} A:{cpu.A:X2} X:{cpu.X:X2} Y:{cpu.Y:X2} P:{cpu.STATUS:X2} SP:{cpu.STKP:X2}");
+                        Console.ResetColor();
+                        return; 
+                    }
+
+                    // ... (Rest of your execution logic: Mark coverage, Clock loop) ...
+                
+                    // Execute
+                    cpu.Clock();
+                    while (!cpu.Complete()) cpu.Clock();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Critical Error at line {lineNum}: {ex.Message}");
+                Console.WriteLine(ex.StackTrace); // Print stack trace to see exactly where
+            }
+
+            // --- STEP 4: PRINT COVERAGE REPORT ---
+            Console.WriteLine("\n--- Instruction Coverage Report ---");
+            int passed = coverage.Count(x => x.Value);
+            int total = coverage.Count;
             
-            Console.WriteLine("Done. Check output.log");
+            Console.WriteLine($"Coverage: {passed}/{total} Instructions executed.");
+            
+            // Print Untested Instructions
+            Console.WriteLine("Untested Instructions:");
+            foreach (var item in coverage.Where(x => x.Value == false))
+            {
+                Console.Write(item.Key + " ");
+            }
+            Console.WriteLine();
         }
 
         static void LoadNestest(cpu6502 cpu)

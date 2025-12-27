@@ -485,3 +485,5 @@ $RECYCLE.BIN/
 
 # vs code preferences
 .vscode
+
+!nestest.log

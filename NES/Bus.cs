@@ -1,4 +1,4 @@
-﻿namespace CPU
+namespace NES
 {
     public static class Bus
     {
@@ -9,7 +9,7 @@
         {
             // 0x00 refers to location 0 in RAM, while 0xFF refers to location 255
             if (address < RAM.Length)
-		        RAM[address] = data;
+                RAM[address] = data;
         }
 
         public static byte Read(ushort address, bool readOnly = false)
@@ -23,5 +23,3 @@
         }
     }
 }
-
-

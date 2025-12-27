@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Dynamic;
 using System.Reflection.Emit;
-using CPU;
+using NES;
 
 namespace tests
 {
@@ -10,14 +10,14 @@ namespace tests
         static void Main(string[] args)
         {
             // --- SETUP ---
-            cpu6502 cpu = new cpu6502();
+            CPU cpu = new CPU();
 
             // Load Nestest ROM (Ensure 64KB RAM as discussed before)
             LoadNestest(cpu);
 
             // Setup CPU Start State for Nestest
             cpu.PC = 0xC000;
-            cpu.SetFlag(cpu6502.FLAGS6502.I, true);
+            cpu.SetFlag(CPU.FLAGS6502.I, true);
             cpu.STKP = 0xFD;
 
             // --- STEP 1: CREATE COVERAGE DICTIONARY ---
@@ -112,7 +112,7 @@ namespace tests
             RunFunctionalTest(cpu);
         }
 
-        public static void RunFunctionalTest(cpu6502 cpu)
+        public static void RunFunctionalTest(CPU cpu)
         {
             Console.WriteLine("---------------------------------------");
             Console.WriteLine("Running Klaus Dormann Functional Test...");
@@ -177,7 +177,7 @@ namespace tests
             }
         }
 
-        static void LoadNestest(cpu6502 cpu)
+        static void LoadNestest(CPU cpu)
         {
             string file = "nestest.nes";
             if (!File.Exists(file))

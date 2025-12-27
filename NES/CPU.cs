@@ -1,8 +1,8 @@
-namespace CPU
+﻿namespace NES
 {
-    public class cpu6502
+    public class CPU
     {
-        public cpu6502()
+        public CPU()
         {
             SetFlag(FLAGS6502.U, true);
 

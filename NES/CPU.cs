@@ -15,7 +15,7 @@
 
             // Row 0 (0x00 - 0x0F)
             Lookup[0x00] = new INSTRUCTION("BRK", BRK, IMM, 7);
-            Lookup[0x01] = new INSTRUCTION("ORA", ORA, INX, 6);
+            Lookup[0x01] = new INSTRUCTION("ORA", ORA, IZX, 6);
             Lookup[0x05] = new INSTRUCTION("ORA", ORA, ZP0, 3);
             Lookup[0x06] = new INSTRUCTION("ASL", ASL, ZP0, 5);
             Lookup[0x08] = new INSTRUCTION("PHP", PHP, IMP, 3);
@@ -489,21 +489,7 @@
 
         // Helper function to get the complete address from 
         // the two lo and hi fragments of PC
-        private ushort GetAddressFromPC(out bool pageChange, out ushort lo, out ushort hi)
-        {
-            pageChange = false;
-            lo = Read(PC);
-            PC++;
-            hi = Read(PC);
-            PC++;
-
-            ushort addr = (ushort)((hi << 8) | lo);
-
-            if ((addr & 0xFF00) != (hi << 8))
-                pageChange = true;
-
-            return addr;
-        }
+        
 
         // Assistive variables to facilitate emulation
         private byte Fetched = 0x00;   // Represents the working input value to the ALU
@@ -622,7 +608,11 @@
         // A full 16-bit address is loaded and used
         byte ABS()
         {
-            AddrAbs = GetAddressFromPC(out _, out _, out _);
+            byte lo = Read(PC);
+            PC++;
+            byte hi = Read(PC);
+            PC++;
+            AddrAbs = (ushort)((hi << 8) | lo);
             return 0x00;
         }
 
@@ -632,14 +622,24 @@
         // the page, an additional clock cycle is required	
         byte ABX()
         {
-            bool pageChange;
-            AddrAbs = GetAddressFromPC(out pageChange, out _, out _);
-            AddrAbs += X;
+            byte lo = Read(PC);
+            PC++;
+            byte hi = Read(PC);
+            PC++;
 
-            if (pageChange)
+            // Construct the Base Address first (Combine Hi + Lo)
+            ushort baseAddr = (ushort)((hi << 8) | lo);
+            
+            // Add X to the full 16-bit address
+            // This allows the carry to propagate correctly to the High Byte
+            AddrAbs = (ushort)(baseAddr + X);
+            
+            // Page Boundary Check
+            // If the high byte of the final address != high byte of the base address
+            if ((AddrAbs & 0xFF00) != (baseAddr & 0xFF00))
                 return 0x01;
-            else
-                return 0x00;	
+            
+            return 0x00;
         }
         
         // Address Mode: Absolute with Y Offset
@@ -648,14 +648,19 @@
         // the page, an additional clock cycle is required
         byte ABY()
         {
-            bool pageChange;
-            AddrAbs = GetAddressFromPC(out pageChange, out _, out _);
-            AddrAbs += Y;
+            byte lo = Read(PC);
+            PC++;
+            byte hi = Read(PC);
+            PC++;
 
-            if (pageChange)
-                return 0x01;
-            else
-                return 0x00;
+            ushort baseAddr = (ushort)((hi << 8) | lo);
+            AddrAbs = (ushort)(baseAddr + Y);
+            
+            // Check if the High Byte changed
+            if ((AddrAbs & 0xFF00) != (baseAddr & 0xFF00))
+                return 1;
+            
+            return 0;
         }
 
         // Note: The next 3 address modes use indirection (aka Pointers!)
@@ -670,23 +675,22 @@
         // invalid actual address
         byte IND()
         {
-            ushort lo;
-            ushort hi;
-
-            AddrAbs = GetAddressFromPC(out _, out lo, out hi);
-
-            ushort ptr = (ushort)((hi << 8) | hi);
-
-            if (lo == 0x00FF) // Simulate page boundary hardware bug
-            {
-                AddrAbs = (ushort)((Read((ushort)(ptr & 0xFF00)) << 8) | Read((ushort)(ptr + 0)));
-            }
-            else // Behave normally
-            {
-                AddrAbs = (ushort)((Read((ushort)(ptr + 1)) << 8) | Read((ushort)(ptr + 0)));
-            }
+            byte ptr_lo = Read(PC);
+            PC++;
+            byte ptr_hi = Read(PC);
+            PC++;
+            ushort ptr = (ushort)((ptr_hi << 8) | ptr_lo);
+            
+            byte lo = Read(ptr);
+            byte hi;
+            if ((ptr & 0x00FF) == 0x00FF)
+                hi = Read((ushort)(ptr & 0xFF00));
+            else
+                hi = Read((ushort)(ptr + 1));
+            
+            AddrAbs = (ushort)((hi << 8) | lo);
             return 0x00;
-        }	
+        }
 
         // Address Mode: Indirect X
         // The supplied 8-bit address is offset by X Register to index
@@ -694,15 +698,15 @@
         // from this location
         byte IZX()
         {
-            ushort t = Read(PC);
+            byte ptr = Read(PC);
             PC++;
-
-            ushort lo = Read((ushort)(t + X & 0x00FF));
-            ushort hi = Read((ushort)((ushort)(t + X + 1) & 0x00FF));
-
+            ushort zpAddr = (ushort)((ptr + X) & 0x00FF);
+            
+            byte lo = Read(zpAddr);
+            byte hi = Read((ushort)((zpAddr + 1) & 0x00FF));
             AddrAbs = (ushort)((hi << 8) | lo);
             return 0x00;
-        }	
+        }
 
         // Address Mode: Indirect Y
         // The supplied 8-bit address indexes a location in page 0x00. From 
@@ -711,19 +715,27 @@
         // change in page then an additional clock cycle is required.
         byte IZY()
         {
-            ushort t = Read(PC);
+            byte ptr = Read(PC);
             PC++;
-
-            ushort lo = Read((ushort)(t & 0x00FF));
-            ushort hi = Read((ushort)((t + 1) & 0x00FF));
-
-            AddrAbs = (ushort)((hi << 8) | lo);
-            AddrAbs += Y;
             
-            if ((AddrAbs & 0xFF00) != (hi << 8))
+            // Read the 16-bit pointer from Zero Page
+            ushort lo = Read(ptr);
+            ushort hi = Read((ushort)((ptr + 1) & 0x00FF)); // Wrap around ZP
+            
+            // Combine to form the Base Address
+            ushort baseAddr = (ushort)((hi << 8) | lo);
+            
+            // Add Y to the full 16-bit address
+            AddrAbs = (ushort)(baseAddr + Y);
+            
+            // Check for Page Crossing
+            // Compare the high byte of the base address vs the high byte of the final address
+            if ((AddrAbs & 0xFF00) != (baseAddr & 0xFF00))
+            {
                 return 0x01;
-            else
-                return 0x00;
+            }
+            
+            return 0x00;
         }
 #endregion
 
@@ -1209,15 +1221,15 @@
             if (Opcode == 0x80 || Opcode == 0x82 || Opcode == 0x89 || 
                 Opcode == 0xC2 || Opcode == 0xE2)
             {
-                PC++;  // Skip the immediate byte manually
+                PC++;
                 return 0x00;
             }
             
             // Your existing multi-cycle NOPs
             switch (Opcode) {
                 case 0x1C: case 0x3C: case 0x5C: case 0x7C:
-                case 0xDC: case 0xFC:
-                    return 1;
+                case 0xDC: case 0xFC: 
+                    return 0x01;
             }
             return 0x00;
         }

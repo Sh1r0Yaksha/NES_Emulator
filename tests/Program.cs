@@ -10,8 +10,8 @@ namespace tests
         static void Main(string[] args)
         {
             // --- SETUP ---
-            CPU cpu = new CPU();
 
+            CPU cpu = Bus.cpu;
             // Load Nestest ROM (Ensure 64KB RAM as discussed before)
             LoadNestest(cpu);
 
@@ -62,7 +62,7 @@ namespace tests
                     // Mark Instruction as Tested
                     byte opcode = Bus.Read(cpu.PC, true);
 
-                    if (cpu.Lookup[opcode].Name == "NOP")
+                    if (cpu.Lookup[opcode].Name == "XXX")
                         continue;
                     string instName = string.Empty;
                     
@@ -73,6 +73,10 @@ namespace tests
                         if (coverage.ContainsKey(instName)) coverage[instName] = true;
                     }
 
+                    Console.WriteLine($"Instruction: {instName} (Opcode: {opcode:X2})");
+                    Console.WriteLine($"Expected: PC:{expected.PC:X4} A:{expected.A:X2} X:{expected.X:X2} Y:{expected.Y:X2} P:{expected.P:X2} SP:{expected.STKP:X2}");
+                    Console.WriteLine($"Actual:   PC:{cpu.PC:X4} A:{cpu.A:X2} X:{cpu.X:X2} Y:{cpu.Y:X2} P:{cpu.STATUS:X2} SP:{cpu.STKP:X2}");
+                    
                     // 4. NOW it is safe to compare
                     if (cpu.PC != expected.PC ||
                         cpu.A != expected.A ||
@@ -84,9 +88,6 @@ namespace tests
                         // 1. Read the opcode at the current PC to see what instruction failed
                         Console.ForegroundColor = ConsoleColor.Red;
                         Console.WriteLine("\n[FAILED] Mismatch at Line " + lineNum);
-                        Console.WriteLine($"Instruction: {instName} (Opcode: {opcode:X2})");
-                        Console.WriteLine($"Expected: PC:{expected.PC:X4} A:{expected.A:X2} X:{expected.X:X2} Y:{expected.Y:X2} P:{expected.P:X2} SP:{expected.STKP:X2}");
-                        Console.WriteLine($"Actual:   PC:{cpu.PC:X4} A:{cpu.A:X2} X:{cpu.X:X2} Y:{cpu.Y:X2} P:{cpu.STATUS:X2} SP:{cpu.STKP:X2}");
                         Console.ResetColor();
                         return; 
                     }

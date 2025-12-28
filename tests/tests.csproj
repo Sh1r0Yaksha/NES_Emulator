@@ -8,8 +8,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../CPU/CPU.csproj" />
+    <ProjectReference Include="../NES/NES.csproj" />
   </ItemGroup>
+
   <ItemGroup>
     <None Update="nestest.nes">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Dynamic;
 using System.Reflection.Emit;
-using CPU;
+using NES;
 
 namespace tests
 {
@@ -10,14 +10,14 @@ namespace tests
         static void Main(string[] args)
         {
             // --- SETUP ---
-            cpu6502 cpu = new cpu6502();
 
+            CPU cpu = Bus.cpu;
             // Load Nestest ROM (Ensure 64KB RAM as discussed before)
             LoadNestest(cpu);
 
             // Setup CPU Start State for Nestest
             cpu.PC = 0xC000;
-            cpu.SetFlag(cpu6502.FLAGS6502.I, true);
+            cpu.SetFlag(CPU.FLAGS6502.I, true);
             cpu.STKP = 0xFD;
 
             // --- STEP 1: CREATE COVERAGE DICTIONARY ---
@@ -60,9 +60,9 @@ namespace tests
                     }
 
                     // Mark Instruction as Tested
-                    byte opcode = Bus.Read(cpu.PC, true);
+                    byte opcode = Bus.CPU_Read(cpu.PC, true);
 
-                    if (cpu.Lookup[opcode].Name == "NOP")
+                    if (cpu.Lookup[opcode].Name == "XXX")
                         continue;
                     string instName = string.Empty;
                     
@@ -73,6 +73,10 @@ namespace tests
                         if (coverage.ContainsKey(instName)) coverage[instName] = true;
                     }
 
+                    Console.WriteLine($"Instruction: {instName} (Opcode: {opcode:X2})");
+                    Console.WriteLine($"Expected: PC:{expected.PC:X4} A:{expected.A:X2} X:{expected.X:X2} Y:{expected.Y:X2} P:{expected.P:X2} SP:{expected.STKP:X2}");
+                    Console.WriteLine($"Actual:   PC:{cpu.PC:X4} A:{cpu.A:X2} X:{cpu.X:X2} Y:{cpu.Y:X2} P:{cpu.STATUS:X2} SP:{cpu.STKP:X2}");
+                    
                     // 4. NOW it is safe to compare
                     if (cpu.PC != expected.PC ||
                         cpu.A != expected.A ||
@@ -84,9 +88,6 @@ namespace tests
                         // 1. Read the opcode at the current PC to see what instruction failed
                         Console.ForegroundColor = ConsoleColor.Red;
                         Console.WriteLine("\n[FAILED] Mismatch at Line " + lineNum);
-                        Console.WriteLine($"Instruction: {instName} (Opcode: {opcode:X2})");
-                        Console.WriteLine($"Expected: PC:{expected.PC:X4} A:{expected.A:X2} X:{expected.X:X2} Y:{expected.Y:X2} P:{expected.P:X2} SP:{expected.STKP:X2}");
-                        Console.WriteLine($"Actual:   PC:{cpu.PC:X4} A:{cpu.A:X2} X:{cpu.X:X2} Y:{cpu.Y:X2} P:{cpu.STATUS:X2} SP:{cpu.STKP:X2}");
                         Console.ResetColor();
                         return; 
                     }
@@ -112,7 +113,7 @@ namespace tests
             RunFunctionalTest(cpu);
         }
 
-        public static void RunFunctionalTest(cpu6502 cpu)
+        public static void RunFunctionalTest(CPU cpu)
         {
             Console.WriteLine("---------------------------------------");
             Console.WriteLine("Running Klaus Dormann Functional Test...");
@@ -177,7 +178,7 @@ namespace tests
             }
         }
 
-        static void LoadNestest(cpu6502 cpu)
+        static void LoadNestest(CPU cpu)
         {
             string file = "nestest.nes";
             if (!File.Exists(file))
@@ -196,13 +197,13 @@ namespace tests
             {
                 byte b = romData[prgStart + i];
                 // Mirror at 0xC000 and 0x8000
-                cpu.Write((ushort)(0xC000 + i), b);
-                cpu.Write((ushort)(0x8000 + i), b);
+                Bus.CPU_Write((ushort)(0xC000 + i), b);
+                Bus.CPU_Write((ushort)(0x8000 + i), b);
             }
             
             // Set Reset Vector (FFFC/FFFD) to C000 just in case your CPU resets
-            cpu.Write(0xFFFC, 0x00);
-            cpu.Write(0xFFFD, 0xC0);
+            Bus.CPU_Write(0xFFFC, 0x00);
+            Bus.CPU_Write(0xFFFD, 0xC0);
         }
     }
 }

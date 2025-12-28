@@ -505,12 +505,12 @@
         // Linkage to the communications bus
         public byte Read(ushort address)
         {
-            return Bus.Read(address);
+            return Bus.CPU_Read(address);
         }
 
         public void Write(ushort address, byte data)
         {
-            Bus.Write(address, data);
+            Bus.CPU_Write(address, data);
         }
 
         byte Fetch()
@@ -1196,25 +1196,6 @@
             return 0x00;
         }
 
-
-	    // byte NOP()
-        // {
-        //     // Sadly not all NOPs are equal, Ive added a few here
-        //     // based on https://wiki.nesdev.com/w/index.php/CPU_unofficial_opcodes
-        //     // and will add more based on game compatibility, and ultimately
-        //     // I'd like to cover all illegal opcodes too
-        //     switch (Opcode) {
-        //     case 0x1C:
-        //     case 0x3C:
-        //     case 0x5C:
-        //     case 0x7C:
-        //     case 0xDC:
-        //     case 0xFC:
-        //         return 1;
-        //     }
-        //     return 0x00;
-        // }
-
         byte NOP()
         {
             // 2-cycle undocumented NOPs (read immediate but don't use it)
@@ -1225,7 +1206,7 @@
                 return 0x00;
             }
             
-            // Your existing multi-cycle NOPs
+            // 1-cycle
             switch (Opcode) {
                 case 0x1C: case 0x3C: case 0x5C: case 0x7C:
                 case 0xDC: case 0xFC: 

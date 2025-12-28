@@ -43,7 +43,6 @@ namespace NES
                 mappedAddr = 0;
                 return false;
             }
-            
         }
 
         public override bool PPU_MapRead(ushort addr, out uint mappedAddr)

@@ -20,7 +20,7 @@ namespace NES
         private static int nSystemClockCounter = 0;
 
         // 2KB of RAM
-        public static byte[] RAM = new byte[64 * 1024];
+        public static byte[] RAM = new byte[2 * 1024];
 
 #region Main bus Read Write
 
@@ -74,23 +74,6 @@ namespace NES
             return data;
         }
 
-        public static void Write(ushort address, byte data)
-        {
-            // 0x00 refers to location 0 in RAM, while 0xFF refers to location 255
-            if (address < RAM.Length)
-                RAM[address] = data;
-        }
-
-        public static byte Read(ushort address, bool readOnly = false)
-        {
-            // Check against the ARRAY SIZE, not 0xFFFF
-            if (address < RAM.Length) 
-                return RAM[address];
-
-            // If address is outside RAM (e.g., ROM or unmapped), return 0 for now
-            return 0x00; 
-        }
-
 #endregion
 
         
@@ -101,7 +84,7 @@ namespace NES
             cpu.Reset();
 	        nSystemClockCounter = 0;   
         }
-        // Clocks the system - a single whole systme tick
+        // Clocks the system - a single whole system tick
         public static void Clock()
         {
             // Clocking. The heart and soul of an emulator. The running

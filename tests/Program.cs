@@ -60,7 +60,7 @@ namespace tests
                     }
 
                     // Mark Instruction as Tested
-                    byte opcode = Bus.Read(cpu.PC, true);
+                    byte opcode = Bus.CPU_Read(cpu.PC, true);
 
                     if (cpu.Lookup[opcode].Name == "XXX")
                         continue;
@@ -197,13 +197,13 @@ namespace tests
             {
                 byte b = romData[prgStart + i];
                 // Mirror at 0xC000 and 0x8000
-                cpu.Write((ushort)(0xC000 + i), b);
-                cpu.Write((ushort)(0x8000 + i), b);
+                Bus.CPU_Write((ushort)(0xC000 + i), b);
+                Bus.CPU_Write((ushort)(0x8000 + i), b);
             }
             
             // Set Reset Vector (FFFC/FFFD) to C000 just in case your CPU resets
-            cpu.Write(0xFFFC, 0x00);
-            cpu.Write(0xFFFD, 0xC0);
+            Bus.CPU_Write(0xFFFC, 0x00);
+            Bus.CPU_Write(0xFFFD, 0xC0);
         }
     }
 }

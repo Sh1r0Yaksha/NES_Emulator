@@ -15,7 +15,7 @@ namespace NES
         public static PPU ppu = new PPU();
 
         // The Cartridge or "GamePak"
-        public static Cartridge Cartridge = new Cartridge(cartridgePath);
+        public static Cartridge Cartridge;
 
         private static int nSystemClockCounter = 0;
 
@@ -36,6 +36,14 @@ namespace NES
             //     // but I figured it might be quite a flexible way of adding
             //     // "custom" hardware to the NES in the future!
             // }
+
+            if (Cartridge.CPU_Write(address, data))
+            {
+                // The cartridge handled the write (e.g. Mapper registers)
+                // We can return early, or let it fall through if you want "Bus Conflict" simulation 
+                // (but for Mapper 0, return is fine).
+                return; 
+            }
 
             if (address >= 0x0000 && address <= 0x1FFF)
             {
@@ -59,7 +67,10 @@ namespace NES
         public static byte CPU_Read(ushort address, bool readOnly = false)
         {
             byte data = 0x00;
-
+            if (Cartridge.CPU_Read(address, out data))
+            {
+                // Cartridge supplied the data. We are done.
+            }
             if (address >= 0x0000 && address <= 0x1FFF)
             {
                 // System RAM Address Range, mirrored every 2048
@@ -104,6 +115,12 @@ namespace NES
             if (nSystemClockCounter % 3 == 0)
             {
                 cpu.Clock();
+            }
+
+            if (ppu.nmi)
+            {
+                ppu.nmi = false; // Acknowledge the signal
+                cpu.NMI();       // Trigger the interrupt on the CPU
             }
 
             nSystemClockCounter++;

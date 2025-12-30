@@ -16,7 +16,7 @@ It has passed the basic list of the "nestest" tests and some of the illegal opco
 
 And it runs Super Mario Bros
 
-![SMB.gif](./SMB.gif)
+![SMB.gif](./SMB.GIF)
 
 Legal Notice:
 

@@ -44,7 +44,7 @@ namespace NES
                 // (but for Mapper 0, return is fine).
                 return; 
             }
-
+            
             if (address >= 0x0000 && address <= 0x1FFF)
             {
                 // System RAM Address Range. The range covers 8KB, though
@@ -62,6 +62,24 @@ namespace NES
                 // which is the equivalent of addr % 8.
                 ppu.CPU_Write((ushort)(address & 0x0007), data);
             }
+
+            else if (address == 0x4014)
+            {
+                // OAMDMA - Copy 256 bytes from CPU RAM to PPU OAM
+                // The data byte specifies the high byte of the RAM address
+                // e.g., writing 0x02 copies from $0200-$02FF
+                ushort baseAddr = (ushort)(data << 8);
+                
+                for (int i = 0; i < 256; i++)
+                {
+                    ppu.OAM[i] = RAM[(baseAddr + i) & 0x07FF]; // Mask for RAM mirroring
+                }
+                
+                // DMA takes CPU cycles - approximately 513 or 514 cycles
+                // depending on whether it starts on an odd or even cycle
+                // For now, we'll add 513 cycles (you can refine this later)
+                cpu.Cycles += (byte)(513 + (nSystemClockCounter % 2));
+            }       
         }
 
         public static byte CPU_Read(ushort address, bool readOnly = false)

@@ -30,7 +30,7 @@ namespace Frontend
 
             // --- [NES INTEGRATION] 3. Initialize System ---
             
-            Bus.Cartridge = new Cartridge("nestest.nes");
+            Bus.Cartridge = new Cartridge("SMB.nes");
 
             if (Bus.Cartridge.ImageValid())
                 Console.WriteLine("Successfully Loaded ROM");

@@ -22,6 +22,27 @@ namespace NES
         private byte[,] tblName = new byte[2, 1024]; // 2KB VRAM (2 Nametables)
         private byte[] tblPalette = new byte[32];    // 32 Bytes Palette RAM
 
+        // OAM (Object Attribute Memory) - Stores up to 64 sprites (4 bytes each)
+        public byte[] OAM = new byte[256];
+        private byte oam_addr = 0;
+
+        // Secondary OAM (8 sprites for current scanline)
+        private struct ObjectData
+        {
+            public byte y;
+            public byte id;
+            public byte attribute;
+            public byte x;
+        }
+
+        private ObjectData[] spriteScanline = new ObjectData[8];
+        private byte sprite_count;
+
+        // Sprite Zero Hit Detection
+        private bool bSpriteZeroHitPossible = false;
+        private bool bSpriteZeroBeingRendered = false;
+
+
         public PPU()
         {
             // Initialize Palette with default black to prevent crashes
@@ -41,7 +62,10 @@ namespace NES
                 tblPalette[i] = 0x00;
             }
 
-            // mask.Reg |= 0x0A; // Enable Background + Left Column
+            for (int i = 0; i < 8; i++)
+            {
+                spriteScanline[i] = new ObjectData();
+            }
         }
 #endregion
 
@@ -119,7 +143,7 @@ namespace NES
                     address_latch = 0;         // Reading status resets address latch
                     break;
                 case 0x0004: // OAM Data
-                    // TODO: Return OAM[OAMAddr]
+                    data = OAM[oam_addr];
                     break;
                 case 0x0007: // PPU Data
                     // Reading data from VRAM is delayed by one read cycle
@@ -150,10 +174,11 @@ namespace NES
                     mask.Reg = data;
                     break;
                 case 0x0003: // OAM Address
-                    // oam_addr = data;
+                    oam_addr = data;
                     break;
                 case 0x0004: // OAM Data
-                    // OAM[oam_addr] = data;
+                    OAM[oam_addr] = data;
+                    oam_addr++; // Auto-increment
                     break;
                 case 0x0005: // Scroll
                     if (address_latch == 0)
@@ -294,6 +319,18 @@ namespace NES
         private ushort bg_shifter_attrib_lo;
         private ushort bg_shifter_attrib_hi;
 
+        // Sprite Shift Registers
+        private byte[] sprite_shifter_pattern_lo = new byte[8];
+        private byte[] sprite_shifter_pattern_hi = new byte[8];
+
+        private byte oam_dma_page = 0x00;
+        private byte oam_dma_addr = 0x00;
+        private byte oam_dma_data = 0x00;
+        private bool oam_dma_transfer = false;
+        private bool oam_dma_dummy = true;
+
+
+
 #endregion
 
 #region CLOCK (The Heartbeat)
@@ -359,10 +396,23 @@ namespace NES
                     TransferAddressX(); 
                 }
 
+                if (Cycle == 257 && Scanline >= 0)
+                {
+                    EvaluateSprites();
+                    LoadSpriteShifters();
+                }
+
                 // Reset Y scroll at end of VBlank (Pre-render line)
                 if (Scanline == -1 && Cycle >= 280 && Cycle < 305) 
                 { 
                     TransferAddressY(); 
+                }
+
+                if (Scanline == -1 && Cycle == 1)
+                {
+                    status.vertical_blank = 0;
+                    status.sprite_zero_hit = 0;
+                    status.sprite_overflow = 0;
                 }
             }
 
@@ -376,30 +426,115 @@ namespace NES
             }
 
             // ==============================================================================
-            // 3. PIXEL COMPOSITOR (The actual drawing)
+            // 3. PIXEL COMPOSITOR (Background + Sprites)
             // ==============================================================================
+            byte bg_pixel = 0x00;
+            byte bg_palette = 0x00;
+
+            if (mask.render_background && Scanline >= 0 && Scanline < 240 && Cycle >= 1 && Cycle < 257)
+            {
+                ushort bit_mux = (ushort)(0x8000 >> fine_x);
+                byte p0 = (byte)((bg_shifter_pattern_lo & bit_mux) > 0 ? 1 : 0);
+                byte p1 = (byte)((bg_shifter_pattern_hi & bit_mux) > 0 ? 1 : 0);
+                bg_pixel = (byte)((p1 << 1) | p0);
+                
+                byte pal0 = (byte)((bg_shifter_attrib_lo & bit_mux) > 0 ? 1 : 0);
+                byte pal1 = (byte)((bg_shifter_attrib_hi & bit_mux) > 0 ? 1 : 0);
+                bg_palette = (byte)((pal1 << 1) | pal0);
+            }
+
+            byte fg_pixel = 0x00;
+            byte fg_palette = 0x00;
+            byte fg_priority = 0x00;
+
+            if (mask.render_sprites && Scanline >= 0 && Scanline < 240 && Cycle >= 1 && Cycle < 257)
+            {
+                bSpriteZeroBeingRendered = false;
+                
+                for (int i = 0; i < sprite_count; i++)
+                {
+                    if (spriteScanline[i].x == 0)
+                    {
+                        byte fg_pixel_lo = (byte)((sprite_shifter_pattern_lo[i] & 0x80) > 0 ? 1 : 0);
+                        byte fg_pixel_hi = (byte)((sprite_shifter_pattern_hi[i] & 0x80) > 0 ? 1 : 0);
+                        fg_pixel = (byte)((fg_pixel_hi << 1) | fg_pixel_lo);
+                        
+                        fg_palette = (byte)((spriteScanline[i].attribute & 0x03) + 0x04);
+                        fg_priority = (byte)((spriteScanline[i].attribute & 0x20) == 0 ? 1 : 0);
+                        
+                        if (fg_pixel != 0)
+                        {
+                            if (i == 0)
+                                bSpriteZeroBeingRendered = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Combine Background and Foreground
             byte pixel = 0x00;
             byte palette = 0x00;
 
-            // Only render if background is enabled and we are in the visible area
-            if (mask.render_background && Scanline >= 0 && Scanline < 240 && Cycle >= 1 && Cycle < 257)
+            if (bg_pixel == 0 && fg_pixel == 0)
             {
-                // Get the specific bit corresponding to Fine X Scroll
-                ushort bit_mux = (ushort)(0x8000 >> fine_x);
-
-                // Extract Pixel bits (Low and High)
-                byte p0 = (byte)((bg_shifter_pattern_lo & bit_mux) > 0 ? 1 : 0);
-                byte p1 = (byte)((bg_shifter_pattern_hi & bit_mux) > 0 ? 1 : 0);
-                pixel = (byte)((p1 << 1) | p0);
-
-                // Extract Palette bits
-                byte pal0 = (byte)((bg_shifter_attrib_lo & bit_mux) > 0 ? 1 : 0);
-                byte pal1 = (byte)((bg_shifter_attrib_hi & bit_mux) > 0 ? 1 : 0);
-                palette = (byte)((pal1 << 1) | pal0);
+                pixel = 0x00;
+                palette = 0x00;
+            }
+            else if (bg_pixel == 0 && fg_pixel > 0)
+            {
+                pixel = fg_pixel;
+                palette = fg_palette;
+            }
+            else if (bg_pixel > 0 && fg_pixel == 0)
+            {
+                pixel = bg_pixel;
+                palette = bg_palette;
+            }
+            else if (bg_pixel > 0 && fg_pixel > 0)
+            {
+                if (fg_priority > 0)
+                {
+                    pixel = fg_pixel;
+                    palette = fg_palette;
+                }
+                else
+                {
+                    pixel = bg_pixel;
+                    palette = bg_palette;
+                }
                 
-                // Write the resulting color to the Screen Buffer
+                // Sprite Zero Hit Detection
+                if (bSpriteZeroHitPossible && bSpriteZeroBeingRendered)
+                {
+                    if (mask.render_background && mask.render_sprites)
+                    {
+                        if (!(mask.render_background_left && mask.render_sprites_left))
+                        {
+                            // Left column rendering is disabled, so sprite zero can only hit from pixel 9 onwards
+                            if (Cycle >= 9 && Cycle < 258)
+                            {
+                                status.sprite_zero_hit = 1;
+                            }
+                        }
+                        else
+                        {
+                            // Left column rendering is enabled, sprite zero can hit from pixel 1 onwards
+                            if (Cycle >= 1 && Cycle < 258)
+                            {
+                                status.sprite_zero_hit = 1;
+                            }
+                        }
+                    }
+                }
+
+            }
+
+            if (Scanline >= 0 && Scanline < 240 && Cycle >= 1 && Cycle < 257)
+            {
                 ScreenBuffer[Scanline * 256 + (Cycle - 1)] = GetColorFromPalette(palette, pixel);
             }
+
 
             // ==============================================================================
             // 4. CLOCK MANAGEMENT
@@ -422,6 +557,20 @@ namespace NES
 
 #region HELPER METHODS
 
+        public void DMA_OAM(byte page, byte[] cpuRAM)
+        {
+            oam_dma_page = page;
+            oam_dma_addr = 0x00;
+            oam_dma_transfer = true;
+            oam_dma_dummy = true;
+            
+            // Quick transfer - copy 256 bytes from CPU memory to OAM
+            ushort baseAddr = (ushort)(page << 8);
+            for (int i = 0; i < 256; i++)
+            {
+                OAM[i] = cpuRAM[baseAddr + i];
+            }
+        }
         private void IncrementScrollX()
         {
             if (mask.render_background || mask.render_sprites)
@@ -461,8 +610,26 @@ namespace NES
         {
             if (mask.render_background)
             {
-                bg_shifter_pattern_lo <<= 1; bg_shifter_pattern_hi <<= 1;
-                bg_shifter_attrib_lo <<= 1; bg_shifter_attrib_hi <<= 1;
+                bg_shifter_pattern_lo <<= 1;
+                bg_shifter_pattern_hi <<= 1;
+                bg_shifter_attrib_lo <<= 1;
+                bg_shifter_attrib_hi <<= 1;
+            }
+
+            if (mask.render_sprites && Cycle >= 1 && Cycle < 258)
+            {
+                for (int i = 0; i < sprite_count; i++)
+                {
+                    if (spriteScanline[i].x > 0)
+                    {
+                        spriteScanline[i].x--;
+                    }
+                    else
+                    {
+                        sprite_shifter_pattern_lo[i] <<= 1;
+                        sprite_shifter_pattern_hi[i] <<= 1;
+                    }
+                }
             }
         }
 
@@ -537,6 +704,147 @@ namespace NES
             0xFFFCFCFC, 0xFFA4E4FC, 0xFFB8B8F8, 0xFFD8B8F8, 0xFFF8B8F8, 0xFFF8A4C0, 0xFFF0D0B0, 0xFFFCE0A0,
             0xFFF8D878, 0xFFD8F878, 0xFFB8F8B8, 0xFFB8F8D8, 0xFF00FCFC, 0xFFF8D8F8, 0xFF000000, 0xFF000000
         };
+
+        private void EvaluateSprites()
+        {
+            sprite_count = 0;
+            bSpriteZeroHitPossible = false;
+            
+            for (int i = 0; i < 8; i++)
+            {
+                sprite_shifter_pattern_lo[i] = 0;
+                sprite_shifter_pattern_hi[i] = 0;
+            }
+
+            byte nOAMEntry = 0;
+            while (nOAMEntry < 64 && sprite_count < 9)
+            {
+                int diff = Scanline - OAM[nOAMEntry * 4];
+                
+                int sprite_size = control.sprite_size == 0 ? 8 : 16;
+                
+                if (diff >= 0 && diff < sprite_size && sprite_count < 8)
+                {
+                    if (sprite_count < 8)
+                    {
+                        if (nOAMEntry == 0)
+                            bSpriteZeroHitPossible = true;
+
+                        spriteScanline[sprite_count].y = OAM[nOAMEntry * 4];
+                        spriteScanline[sprite_count].id = OAM[nOAMEntry * 4 + 1];
+                        spriteScanline[sprite_count].attribute = OAM[nOAMEntry * 4 + 2];
+                        spriteScanline[sprite_count].x = OAM[nOAMEntry * 4 + 3];
+                        sprite_count++;
+                    }
+                }
+                nOAMEntry++;
+            }
+            
+            status.sprite_overflow = (byte)(sprite_count >= 8 ? 1 : 0);
+        }
+
+        private void LoadSpriteShifters()
+        {
+            for (int i = 0; i < sprite_count; i++)
+            {
+                byte sprite_pattern_bits_lo, sprite_pattern_bits_hi;
+                ushort sprite_pattern_addr_lo, sprite_pattern_addr_hi;
+
+                if (control.sprite_size == 0)
+                {
+                    // 8x8 Sprite Mode
+                    if ((spriteScanline[i].attribute & 0x80) == 0)
+                    {
+                        // Sprite is NOT vertically flipped
+                        sprite_pattern_addr_lo = (ushort)(
+                            (control.pattern_sprite << 12) |
+                            (spriteScanline[i].id << 4) |
+                            (Scanline - spriteScanline[i].y)
+                        );
+                    }
+                    else
+                    {
+                        // Sprite IS vertically flipped
+                        sprite_pattern_addr_lo = (ushort)(
+                            (control.pattern_sprite << 12) |
+                            (spriteScanline[i].id << 4) |
+                            (7 - (Scanline - spriteScanline[i].y))
+                        );
+                    }
+                }
+                else
+                {
+                    // 8x16 Sprite Mode
+                    if ((spriteScanline[i].attribute & 0x80) == 0)
+                    {
+                        // Sprite is NOT vertically flipped
+                        if (Scanline - spriteScanline[i].y < 8)
+                        {
+                            // Top half
+                            sprite_pattern_addr_lo = (ushort)(
+                                ((spriteScanline[i].id & 0x01) << 12) |
+                                ((spriteScanline[i].id & 0xFE) << 4) |
+                                ((Scanline - spriteScanline[i].y) & 0x07)
+                            );
+                        }
+                        else
+                        {
+                            // Bottom half
+                            sprite_pattern_addr_lo = (ushort)(
+                                ((spriteScanline[i].id & 0x01) << 12) |
+                                (((spriteScanline[i].id & 0xFE) + 1) << 4) |
+                                ((Scanline - spriteScanline[i].y) & 0x07)
+                            );
+                        }
+                    }
+                    else
+                    {
+                        // Sprite IS vertically flipped
+                        if (Scanline - spriteScanline[i].y < 8)
+                        {
+                            // Top half (which is actually bottom when flipped)
+                            sprite_pattern_addr_lo = (ushort)(
+                                ((spriteScanline[i].id & 0x01) << 12) |
+                                (((spriteScanline[i].id & 0xFE) + 1) << 4) |
+                                (7 - (Scanline - spriteScanline[i].y) & 0x07)
+                            );
+                        }
+                        else
+                        {
+                            // Bottom half (which is actually top when flipped)
+                            sprite_pattern_addr_lo = (ushort)(
+                                ((spriteScanline[i].id & 0x01) << 12) |
+                                ((spriteScanline[i].id & 0xFE) << 4) |
+                                (7 - (Scanline - spriteScanline[i].y) & 0x07)
+                            );
+                        }
+                    }
+                }
+
+                sprite_pattern_addr_hi = (ushort)(sprite_pattern_addr_lo + 8);
+                sprite_pattern_bits_lo = PPU_Read(sprite_pattern_addr_lo);
+                sprite_pattern_bits_hi = PPU_Read(sprite_pattern_addr_hi);
+
+                if ((spriteScanline[i].attribute & 0x40) != 0)
+                {
+                    // Horizontal flip
+                    sprite_pattern_bits_lo = FlipByte(sprite_pattern_bits_lo);
+                    sprite_pattern_bits_hi = FlipByte(sprite_pattern_bits_hi);
+                }
+
+                sprite_shifter_pattern_lo[i] = sprite_pattern_bits_lo;
+                sprite_shifter_pattern_hi[i] = sprite_pattern_bits_hi;
+            }
+        }
+
+        private byte FlipByte(byte b)
+        {
+            b = (byte)((b & 0xF0) >> 4 | (b & 0x0F) << 4);
+            b = (byte)((b & 0xCC) >> 2 | (b & 0x33) << 2);
+            b = (byte)((b & 0xAA) >> 1 | (b & 0x55) << 1);
+            return b;
+        }
+
 #endregion
     }
 }

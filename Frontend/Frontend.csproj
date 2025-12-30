@@ -16,7 +16,7 @@
     <ProjectReference Include="../NES/NES.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <None Update="Super Mario Bros. (World).nes">
+    <None Update="SMB.nes">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

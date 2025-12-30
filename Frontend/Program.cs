@@ -3,6 +3,7 @@ using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
 using Silk.NET.Maths;
 using NES;
+using Silk.NET.GLFW;
 
 namespace Frontend
 {
@@ -10,6 +11,7 @@ namespace Frontend
     {
         // --- 1. Window & GL Resources ---
         private static IWindow _window;
+        private static IInputContext input;
         private static GL _gl;
         private static uint _vao, _vbo, _ebo;
         private static uint _program;
@@ -42,7 +44,7 @@ namespace Frontend
             _window.Render += OnRender;
             _window.Update += OnUpdate;
             _window.Closing += OnClose;
-
+            
             _window.Run();
         }
 
@@ -102,10 +104,14 @@ namespace Frontend
             CreateShaderProgram();
 
             // --- E. Add Inputs
-            IInputContext input = _window.CreateInput();
+            input = _window.CreateInput();
 
             for (int i = 0; i < input.Keyboards.Count; i++)
+            {
                 input.Keyboards[i].KeyDown += KeyDown;
+                input.Keyboards[i].KeyUp += KeyUp;
+            }
+                
         }
 
         private static void OnUpdate(double deltaTime)
@@ -209,6 +215,29 @@ namespace Frontend
         {
             if (key == Key.Escape)
                 _window.Close();
+
+            // Controller 1 input
+            if (key == Key.X)           Bus.controller1 |= (byte)Input.A;
+            if (key == Key.Z)           Bus.controller1 |= (byte)Input.B;
+            if (key == Key.ShiftLeft)  Bus.controller1 |= (byte)Input.Select;
+            if (key == Key.Space)       Bus.controller1 |= (byte)Input.Start;
+            if (key == Key.Up)          Bus.controller1 |= (byte)Input.Up;
+            if (key == Key.Down)        Bus.controller1 |= (byte)Input.Down;
+            if (key == Key.Left)        Bus.controller1 |= (byte)Input.Left;
+            if (key == Key.Right)       Bus.controller1 |= (byte)Input.Right;
+        }
+
+        private static void KeyUp(IKeyboard keyboard, Key key, int keyCode)
+        {
+            // Controller 1 input release
+            if (key == Key.X)           Bus.controller1 &= unchecked((byte)~(byte)Input.A);
+            if (key == Key.Z)           Bus.controller1 &= unchecked((byte)~(byte)Input.B);
+            if (key == Key.ShiftLeft)  Bus.controller1 &= unchecked((byte)~(byte)Input.Select);
+            if (key == Key.Space)       Bus.controller1 &= unchecked((byte)~(byte)Input.Start);
+            if (key == Key.Up)          Bus.controller1 &= unchecked((byte)~(byte)Input.Up);
+            if (key == Key.Down)        Bus.controller1 &= unchecked((byte)~(byte)Input.Down);
+            if (key == Key.Left)        Bus.controller1 &= unchecked((byte)~(byte)Input.Left);
+            if (key == Key.Right)       Bus.controller1 &= unchecked((byte)~(byte)Input.Right);
         }
 
         

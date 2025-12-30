@@ -19,6 +19,18 @@ namespace NES
 
         private static int nSystemClockCounter = 0;
 
+        // Controller state
+        public static byte controller1 = 0x00;
+        public static byte controller2 = 0x00;
+
+        // Controller shift registers (for reading)
+        private static byte controller1_shift = 0x00;
+        private static byte controller2_shift = 0x00;
+
+        // Strobe state
+        private static bool controller_strobe = false;
+
+
         // 2KB of RAM
         public static byte[] RAM = new byte[2 * 1024];
 
@@ -79,7 +91,22 @@ namespace NES
                 // depending on whether it starts on an odd or even cycle
                 // For now, we'll add 513 cycles (you can refine this later)
                 cpu.Cycles += (byte)(513 + (nSystemClockCounter % 2));
-            }       
+            } 
+
+            else if (address == 0x4016)
+            {
+                // Controller strobe
+                // Writing 1 then 0 latches the controller state
+                controller_strobe = (data & 0x01) != 0;
+                
+                if (controller_strobe)
+                {
+                    // While strobe is high, reload the shift registers
+                    controller1_shift = controller1;
+                    controller2_shift = controller2;
+                }
+            }
+      
         }
 
         public static byte CPU_Read(ushort address, bool readOnly = false)
@@ -98,6 +125,28 @@ namespace NES
             {
                 // PPU Address range, mirrored every 8
                 data = ppu.CPU_Read((ushort)(address & 0x0007), readOnly);
+            }
+            else if (address == 0x4016)
+            {
+                // Controller 1 Read
+                // Returns the current bit in the shift register (bit 0)
+                // Then shifts right for the next read
+                data = (byte)((controller1_shift & 0x01) | 0x40);
+                
+                if (!controller_strobe)
+                {
+                    controller1_shift >>= 1;
+                }
+            }
+            else if (address == 0x4017)
+            {
+                // Controller 2 Read
+                data = (byte)((controller2_shift & 0x01) | 0x40);
+                
+                if (!controller_strobe)
+                {
+                    controller2_shift >>= 1;
+                }
             }
 
             return data;
@@ -143,6 +192,16 @@ namespace NES
 
             nSystemClockCounter++;
         }
+
+        public static void SetControllerState(int controllerNum, byte state)
+        {
+            if (controllerNum == 1)
+                controller1 = state;
+            else if (controllerNum == 2)
+                controller2 = state;
+        }
+
+
 #endregion
     }
 }

@@ -12,11 +12,11 @@ This is a hobby project created for educational purposes to better understand em
 
 It has passed the basic list of the "nestest" tests and some of the illegal opcodes tests
 
-![nestest.gif](nestest.gif)
+![nestest.gif](./nestest.gif)
 
 And it runs Super Mario Bros
 
-![SMB.gif](SMB.gif)
+![SMB.gif](./SMB.gif)
 
 Legal Notice:
 

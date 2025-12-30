@@ -230,14 +230,14 @@ namespace Frontend
         private static void KeyUp(IKeyboard keyboard, Key key, int keyCode)
         {
             // Controller 1 input release
-            if (key == Key.X)           Bus.controller1 &= unchecked((byte)~(byte)Input.A);
-            if (key == Key.Z)           Bus.controller1 &= unchecked((byte)~(byte)Input.B);
-            if (key == Key.ShiftLeft)  Bus.controller1 &= unchecked((byte)~(byte)Input.Select);
-            if (key == Key.Space)       Bus.controller1 &= unchecked((byte)~(byte)Input.Start);
-            if (key == Key.Up)          Bus.controller1 &= unchecked((byte)~(byte)Input.Up);
-            if (key == Key.Down)        Bus.controller1 &= unchecked((byte)~(byte)Input.Down);
-            if (key == Key.Left)        Bus.controller1 &= unchecked((byte)~(byte)Input.Left);
-            if (key == Key.Right)       Bus.controller1 &= unchecked((byte)~(byte)Input.Right);
+            if (key == Key.X)           Bus.controller1 &= unchecked((byte)~Input.A);
+            if (key == Key.Z)           Bus.controller1 &= unchecked((byte)~Input.B);
+            if (key == Key.ShiftLeft)  Bus.controller1 &= unchecked((byte)~Input.Select);
+            if (key == Key.Space)       Bus.controller1 &= unchecked((byte)~Input.Start);
+            if (key == Key.Up)          Bus.controller1 &= unchecked((byte)~Input.Up);
+            if (key == Key.Down)        Bus.controller1 &= unchecked((byte)~Input.Down);
+            if (key == Key.Left)        Bus.controller1 &= unchecked((byte)~Input.Left);
+            if (key == Key.Right)       Bus.controller1 &= unchecked((byte)~Input.Right);
         }
 
         

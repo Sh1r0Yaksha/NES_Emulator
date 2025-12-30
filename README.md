@@ -6,11 +6,39 @@ Besides this, the [nesdev.org](https://www.nesdev.org/) website and [PendleCodeM
 
 This is in no way a working emulator and should not be used to play the games, it is just an attempt to learn how the NES works.
 
-# Important
+Disclaimer
 
-This is just a hobby project that I do in my free time so it is not complete yet.
-So far only the ADC and SBC instructions for the CPU have been added and implemented.
+This is a hobby project created for educational purposes to better understand emulation, computer architecture, and low-level programming. It is not complete yet. However, it is in a playable state and can be used to play a few games without any audio.
 
+It has passed the basic list of the "nestest" tests and some of the illegal opcodes tests
+
+![nestest.gif](nestest.gif)
+
+And it runs Super Mario Bros
+
+![SMB.gif](SMB.gif)
+
+Legal Notice:
+
+This emulator is provided as-is for educational and personal use only. It does not include any copyrighted games, BIOS files, or proprietary Nintendo software.
+
+Regarding ROMs:
+
+This project does not endorse, encourage, or facilitate software piracy in any form. To use this emulator legally, you must:
+
+    Only use ROM files that you have legally obtained
+
+    Own the original physical cartridge of any game you play
+
+    Create your own ROM dumps from cartridges you personally own
+
+    Comply with all applicable copyright laws in your jurisdiction
+
+Downloading ROM files from the internet is illegal in most countries, even if you own the physical cartridge. We do not provide, link to, or support any sources for downloading copyrighted ROMs.
+
+Trademarks:
+
+Nintendo, NES, Nintendo Entertainment System, and all associated game titles are trademarks and copyrights of Nintendo Co., Ltd. This project is not affiliated with, endorsed by, or sponsored by Nintendo in any way.
 
 # License (OLC-3)
 Copyright 2018, 2019, 2020, 2021 OneLoneCoder.com

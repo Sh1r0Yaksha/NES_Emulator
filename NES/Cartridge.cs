@@ -151,18 +151,13 @@ namespace NES
         // Communication with PPU Bus
         public bool PPU_Read(ushort address,out byte data)
         {
-            // DEBUG LOG: Only print for address 0x0010 (Start of '0' character usually)
-            if (address == 0x0010) 
-            {
-                Console.WriteLine($"[DEBUG] PPU Read $0010. CHR_Size: {vCHRMemory.Length}");
-            }
+            
             if (pMapper.PPU_MapRead(address,out uint mapped_addr))
             {
                 // 2. Fetch the byte from the CHR array loaded earlier
                 // Check bounds just in case
                 if (mapped_addr < vCHRMemory.Length)
                 {
-                    if (address == 0x0010) Console.WriteLine($"[DEBUG] Mapper mapped to {mapped_addr}");
                     data = vCHRMemory[mapped_addr];
                     return true;
                 }

@@ -2,7 +2,8 @@
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
 using Silk.NET.Maths;
-using System.Runtime.InteropServices;
+using NES;
+using Silk.NET.GLFW;
 
 namespace Frontend
 {
@@ -10,6 +11,7 @@ namespace Frontend
     {
         // --- 1. Window & GL Resources ---
         private static IWindow _window;
+        private static IInputContext input;
         private static GL _gl;
         private static uint _vao, _vbo, _ebo;
         private static uint _program;
@@ -20,10 +22,6 @@ namespace Frontend
         // 256 pixels * 240 lines
         private static uint[] _screenBuffer = new uint[256 * 240];
 
-        // --- [NES INTEGRATION] 2. Your Emulator Instance ---
-        // private static Bus _nes;
-        // private static Cartridge _cart;
-
 
         public static void Main(string[] args)
         {
@@ -33,19 +31,20 @@ namespace Frontend
             options.VSync = true; // Use VSync for now to prevent CPU melting
 
             // --- [NES INTEGRATION] 3. Initialize System ---
-            // _cart = new Cartridge("super_mario_bros.nes");
-            // if (!_cart.bImageValid) { Console.WriteLine("Invalid ROM"); return; }
-            // 
-            // _nes = new Bus();
-            // _nes.InsertCartridge(_cart);
-            // _nes.Reset();
+            
+            Bus.Cartridge = new Cartridge("SMB.nes");
 
+            if (Bus.Cartridge.ImageValid())
+                Console.WriteLine("Successfully Loaded ROM");
+            else
+                Console.WriteLine("Error while loading ROM");
+            Bus.Reset();
             _window = Window.Create(options);
             _window.Load += OnLoad;
             _window.Render += OnRender;
             _window.Update += OnUpdate;
             _window.Closing += OnClose;
-
+            
             _window.Run();
         }
 
@@ -53,19 +52,6 @@ namespace Frontend
         {
             // Initialize OpenGL
             _gl = _window.CreateOpenGL();
-
-            // --- A. Fill Buffer with "Static" (Test Data) ---
-            // This proves your rendering pipeline works before you connect the PPU
-            // --- TEST DATA INIT (Delete this later) ---
-            Random rnd = new Random();
-            for (int i = 0; i < _screenBuffer.Length; i++)
-            {
-                // Format: 0xAABBGGRR (Alpha must be FF)
-                byte r = (byte)rnd.Next(255);
-                byte g = (byte)rnd.Next(255);
-                byte b = (byte)rnd.Next(255);
-                _screenBuffer[i] = (uint)(0xFF000000 | (b << 16) | (g << 8) | r);
-            }
 
             // --- B. Create GPU Texture ---
             _texture = _gl.GenTexture();
@@ -118,25 +104,28 @@ namespace Frontend
             CreateShaderProgram();
 
             // --- E. Add Inputs
-            IInputContext input = _window.CreateInput();
+            input = _window.CreateInput();
 
             for (int i = 0; i < input.Keyboards.Count; i++)
+            {
                 input.Keyboards[i].KeyDown += KeyDown;
+                input.Keyboards[i].KeyUp += KeyUp;
+            }
+                
         }
 
         private static void OnUpdate(double deltaTime)
         {
             // --- [NES INTEGRATION] 5. The Clock Loop ---
 
-            // OPTION A: Current Test Code (Updates random pixels)
-            _screenBuffer[new Random().Next(0, _screenBuffer.Length)] = 0xFFFFFFFF;
 
             // OPTION B: Real Emulation (Uncomment this later)
-            // while (!_nes.ppu.frameComplete)
-            // {
-            //     _nes.Clock();
-            // }
-            // _nes.ppu.frameComplete = false;
+            while (!Bus.ppu.frameComplete)
+            {
+                Bus.Clock();
+                _screenBuffer = Bus.ppu.ScreenBuffer;
+            }
+            Bus.ppu.frameComplete = false;
         }
 
         private static unsafe void OnRender(double deltaTime)
@@ -148,17 +137,12 @@ namespace Frontend
             
             // --- [NES INTEGRATION] 4. Switch Buffer Pointer ---
             
-            // OPTION A: Current Test Code
-            fixed (void* data = _screenBuffer)
+
+            // OPTION B: Real PPU (Uncomment this later)
+            fixed (void* data = Bus.ppu.ScreenBuffer)
             {
                 _gl.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, 256, 240, PixelFormat.Bgra, PixelType.UnsignedByte, data);
             }
-
-            // OPTION B: Real PPU (Uncomment this later)
-            // fixed (void* data = _nes.ppu.ScreenBuffer)
-            // {
-            //     _gl.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, 256, 240, PixelFormat.Bgra, PixelType.UnsignedByte, data);
-            // }
 
             // 2. Draw the Quad
             _gl.UseProgram(_program);
@@ -231,6 +215,29 @@ namespace Frontend
         {
             if (key == Key.Escape)
                 _window.Close();
+
+            // Controller 1 input
+            if (key == Key.X)           Bus.controller1 |= (byte)Input.A;
+            if (key == Key.Z)           Bus.controller1 |= (byte)Input.B;
+            if (key == Key.ShiftLeft)  Bus.controller1 |= (byte)Input.Select;
+            if (key == Key.Space)       Bus.controller1 |= (byte)Input.Start;
+            if (key == Key.Up)          Bus.controller1 |= (byte)Input.Up;
+            if (key == Key.Down)        Bus.controller1 |= (byte)Input.Down;
+            if (key == Key.Left)        Bus.controller1 |= (byte)Input.Left;
+            if (key == Key.Right)       Bus.controller1 |= (byte)Input.Right;
+        }
+
+        private static void KeyUp(IKeyboard keyboard, Key key, int keyCode)
+        {
+            // Controller 1 input release
+            if (key == Key.X)           Bus.controller1 &= unchecked((byte)~Input.A);
+            if (key == Key.Z)           Bus.controller1 &= unchecked((byte)~Input.B);
+            if (key == Key.ShiftLeft)  Bus.controller1 &= unchecked((byte)~Input.Select);
+            if (key == Key.Space)       Bus.controller1 &= unchecked((byte)~Input.Start);
+            if (key == Key.Up)          Bus.controller1 &= unchecked((byte)~Input.Up);
+            if (key == Key.Down)        Bus.controller1 &= unchecked((byte)~Input.Down);
+            if (key == Key.Left)        Bus.controller1 &= unchecked((byte)~Input.Left);
+            if (key == Key.Right)       Bus.controller1 &= unchecked((byte)~Input.Right);
         }
 
         

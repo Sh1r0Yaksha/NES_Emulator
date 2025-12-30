@@ -15,9 +15,21 @@ namespace NES
         public static PPU ppu = new PPU();
 
         // The Cartridge or "GamePak"
-        public static Cartridge Cartridge = new Cartridge(cartridgePath);
+        public static Cartridge Cartridge;
 
         private static int nSystemClockCounter = 0;
+
+        // Controller state
+        public static byte controller1 = 0x00;
+        public static byte controller2 = 0x00;
+
+        // Controller shift registers (for reading)
+        private static byte controller1_shift = 0x00;
+        private static byte controller2_shift = 0x00;
+
+        // Strobe state
+        private static bool controller_strobe = false;
+
 
         // 2KB of RAM
         public static byte[] RAM = new byte[2 * 1024];
@@ -37,6 +49,14 @@ namespace NES
             //     // "custom" hardware to the NES in the future!
             // }
 
+            if (Cartridge.CPU_Write(address, data))
+            {
+                // The cartridge handled the write (e.g. Mapper registers)
+                // We can return early, or let it fall through if you want "Bus Conflict" simulation 
+                // (but for Mapper 0, return is fine).
+                return; 
+            }
+            
             if (address >= 0x0000 && address <= 0x1FFF)
             {
                 // System RAM Address Range. The range covers 8KB, though
@@ -54,12 +74,48 @@ namespace NES
                 // which is the equivalent of addr % 8.
                 ppu.CPU_Write((ushort)(address & 0x0007), data);
             }
+
+            else if (address == 0x4014)
+            {
+                // OAMDMA - Copy 256 bytes from CPU RAM to PPU OAM
+                // The data byte specifies the high byte of the RAM address
+                // e.g., writing 0x02 copies from $0200-$02FF
+                ushort baseAddr = (ushort)(data << 8);
+                
+                for (int i = 0; i < 256; i++)
+                {
+                    ppu.OAM[i] = RAM[(baseAddr + i) & 0x07FF]; // Mask for RAM mirroring
+                }
+                
+                // DMA takes CPU cycles - approximately 513 or 514 cycles
+                // depending on whether it starts on an odd or even cycle
+                // For now, we'll add 513 cycles (you can refine this later)
+                cpu.Cycles += (byte)(513 + (nSystemClockCounter % 2));
+            } 
+
+            else if (address == 0x4016)
+            {
+                // Controller strobe
+                // Writing 1 then 0 latches the controller state
+                controller_strobe = (data & 0x01) != 0;
+                
+                if (controller_strobe)
+                {
+                    // While strobe is high, reload the shift registers
+                    controller1_shift = controller1;
+                    controller2_shift = controller2;
+                }
+            }
+      
         }
 
         public static byte CPU_Read(ushort address, bool readOnly = false)
         {
             byte data = 0x00;
-
+            if (Cartridge.CPU_Read(address, out data))
+            {
+                // Cartridge supplied the data. We are done.
+            }
             if (address >= 0x0000 && address <= 0x1FFF)
             {
                 // System RAM Address Range, mirrored every 2048
@@ -69,6 +125,28 @@ namespace NES
             {
                 // PPU Address range, mirrored every 8
                 data = ppu.CPU_Read((ushort)(address & 0x0007), readOnly);
+            }
+            else if (address == 0x4016)
+            {
+                // Controller 1 Read
+                // Returns the current bit in the shift register (bit 0)
+                // Then shifts right for the next read
+                data = (byte)((controller1_shift & 0x01) | 0x40);
+                
+                if (!controller_strobe)
+                {
+                    controller1_shift >>= 1;
+                }
+            }
+            else if (address == 0x4017)
+            {
+                // Controller 2 Read
+                data = (byte)((controller2_shift & 0x01) | 0x40);
+                
+                if (!controller_strobe)
+                {
+                    controller2_shift >>= 1;
+                }
             }
 
             return data;
@@ -106,8 +184,24 @@ namespace NES
                 cpu.Clock();
             }
 
+            if (ppu.nmi)
+            {
+                ppu.nmi = false; // Acknowledge the signal
+                cpu.NMI();       // Trigger the interrupt on the CPU
+            }
+
             nSystemClockCounter++;
         }
+
+        public static void SetControllerState(int controllerNum, byte state)
+        {
+            if (controllerNum == 1)
+                controller1 = state;
+            else if (controllerNum == 2)
+                controller2 = state;
+        }
+
+
 #endregion
     }
 }
